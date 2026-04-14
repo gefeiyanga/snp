@@ -1,0 +1,53 @@
+@import (reference) '@/styles/finance-theme.less';
+
+/* src/styles/global.less */
+
+/* 禁止文本选择 */
+* {
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE10+/Edge */
+  user-select: none; /* Standard */
+  -webkit-touch-callout: none; /* 禁止iOS长按时显示系统菜单 */
+  -webkit-tap-highlight-color: transparent; /* 去除点击高亮 */
+  -webkit-tap-highlight-color: transparent; /* iOS Safari */
+  -webkit-user-drag: none; /* 禁止拖拽图片等元素 */
+}
+
+/* 允许输入框等元素正常选择文本 */
+input, textarea, [contenteditable] {
+  -webkit-user-select: auto;
+  -moz-user-select: auto;
+  -ms-user-select: auto;
+  user-select: auto;
+  -webkit-touch-callout: default;
+}
+
+/* 防止页面滚动回弹效果 */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* 启用惯性滚动，提升移动端丝滑度 */
+  overscroll-behavior-y: contain; /* 保留自然滚动手感，减少串页滚动 */
+  background-color: @finance-page-bg; /* 与财务主题保持一致 */
+  color: var(--van-text-color);
+}
+
+/* 针对特定Vant组件的样式调整 */
+.van-field__control,
+.van-cell__value,
+.van-textarea__input {
+  -webkit-user-select: auto;
+  -moz-user-select: auto;
+  -ms-user-select: auto;
+  user-select: auto;
+  -webkit-touch-callout: default;
+}
+
+/* 为所有页面容器添加淡灰色背景 */
+#app {
+  min-height: 100%;
+  background-color: @finance-page-bg !important; /* 确保整个应用背景一致 */
+}

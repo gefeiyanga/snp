@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "WebSearch",
+      "WebFetch(domain:vant-ui.github.io)",
+      "Bash(npx lessc:*)"
+    ]
+  }
+}
