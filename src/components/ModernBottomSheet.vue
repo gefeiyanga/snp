@@ -96,6 +96,81 @@
           </div>
         </div>
 
+        <template v-if="type === 'liability' && isAmortizingSheet">
+          <div class="form-item">
+            <div class="field-label">还款方式</div>
+            <div class="type-tags">
+              <van-tag
+                v-for="opt in repaymentMethodOptions"
+                :key="opt.value"
+                round
+                size="medium"
+                :plain="formData.repaymentMethod !== opt.value"
+                :style="formData.repaymentMethod === opt.value ? activeTagStyle : inactiveTagStyle"
+                @click="formData.repaymentMethod = opt.value"
+              >
+                {{ opt.label }}
+              </van-tag>
+            </div>
+          </div>
+          <div class="form-item">
+            <div class="field-label">总期数（月）</div>
+            <div class="field-wrapper">
+              <van-field
+                v-model="formData.termMonths"
+                type="digit"
+                :border="false"
+                placeholder="例如 360"
+                class="form-field"
+              />
+            </div>
+          </div>
+          <div class="form-item">
+            <div class="field-label">年利率（%）</div>
+            <div class="field-wrapper">
+              <van-field
+                v-model="formData.interestRate"
+                type="digit"
+                :border="false"
+                placeholder="必填"
+                class="form-field"
+              />
+            </div>
+          </div>
+          <div class="form-item">
+            <div class="field-label">月供（试算，只读）</div>
+            <div class="field-wrapper">
+              <van-field :model-value="previewMonthly" readonly :border="false" class="form-field" />
+            </div>
+          </div>
+        </template>
+        <template v-else-if="type === 'liability'">
+          <div class="form-item">
+            <div class="field-label">月供（元）</div>
+            <div class="field-wrapper">
+              <van-field
+                v-model="formData.monthlyPayment"
+                type="digit"
+                :border="false"
+                placeholder="选填"
+                class="form-field"
+              />
+            </div>
+          </div>
+          <div class="form-item">
+            <div class="field-label">年利率（%）</div>
+            <div class="field-wrapper">
+              <van-field
+                v-model="formData.interestRate"
+                type="digit"
+                :border="false"
+                placeholder="选填"
+                class="form-field"
+              />
+            </div>
+          </div>
+        </template>
+
         <van-button
           block
           round
@@ -122,26 +197,49 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { showToast } from 'vant';
+import { assetCanonicalLabel } from '@/domain/ledgerCategories';
+import {
+  firstInstallmentEqualPayment,
+  firstInstallmentEqualPrincipal
+} from '@/domain/loanSchedule';
 
 interface FormData {
-  id?: string;
+  id: string;
   name: string;
   amount: string;
   category: string;
   description: string;
   date: string;
+  monthlyPayment: string;
+  interestRate: string;
+  termMonths: string;
+  repaymentMethod: 'equal_payment' | 'equal_principal';
 }
 
 interface Props {
   modelValue: boolean;
   title: string;
   type: 'asset' | 'liability';
-  initialData?: Partial<FormData>;
+  /** create：新建；edit：编辑（影响负债金额文案等） */
+  mode?: 'create' | 'edit';
+  initialData?: Partial<{
+    id: string;
+    name: string;
+    amount: number | string;
+    category: string;
+    description: string;
+    date: string;
+    monthlyPayment: number | string;
+    interestRate: number | string;
+    termMonths: number | string;
+    repaymentMethod: 'equal_payment' | 'equal_principal';
+  }>;
   submitText?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   submitText: '保存',
+  mode: 'create',
   initialData: () => ({})
 });
 
@@ -159,12 +257,22 @@ const today = new Date();
 const defaultDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
 const formData = ref<FormData>({
+  id: '',
   name: '',
   amount: '',
   category: '',
   description: '',
-  date: defaultDate
+  date: defaultDate,
+  monthlyPayment: '',
+  interestRate: '',
+  termMonths: '',
+  repaymentMethod: 'equal_payment'
 });
+
+const repaymentMethodOptions = [
+  { value: 'equal_payment' as const, label: '等额本息' },
+  { value: 'equal_principal' as const, label: '等额本金' }
+];
 
 const showDatePicker = ref(false);
 const pickerDate = ref([
@@ -195,10 +303,40 @@ const typeOptions = computed(() =>
 );
 const activeType = ref(typeOptions.value[0]);
 
+const isAmortizingSheet = computed(
+  () => props.type === 'liability' && (activeType.value === '房贷' || activeType.value === '车贷')
+);
+
 const hasAmount = computed(() => Number(formData.value.amount || 0) > 0);
 const submitText = computed(() => props.submitText);
-const amountLabel = computed(() => (props.type === 'asset' ? '买入金额' : '负债金额'));
-const dateLabel = computed(() => (props.type === 'asset' ? '买入日期' : '发生日期'));
+const amountLabel = computed(() => {
+  if (props.type === 'asset') return '买入金额';
+  if (isAmortizingSheet.value) return '合同本金（元）';
+  if (props.mode === 'edit') return '当前剩余本金';
+  return '负债金额';
+});
+const dateLabel = computed(() => {
+  if (props.type === 'asset') return '买入日期';
+  if (isAmortizingSheet.value) return '第一期还款日';
+  return '发生日期';
+});
+
+const previewMonthly = computed(() => {
+  if (!isAmortizingSheet.value) return '—';
+  const P = Number(formData.value.amount || 0);
+  const n = Number(formData.value.termMonths || 0);
+  const rate = Number(formData.value.interestRate || 0);
+  if (!P || !n || n < 1) return '—';
+  try {
+    const v =
+      formData.value.repaymentMethod === 'equal_principal'
+        ? firstInstallmentEqualPrincipal(P, rate, n)
+        : firstInstallmentEqualPayment(P, rate, n);
+    return v.toFixed(2);
+  } catch {
+    return '—';
+  }
+});
 const nameLabel = computed(() => (props.type === 'asset' ? '资产名称' : '负债名称'));
 const namePlaceholder = computed(() => (props.type === 'asset' ? '输入资产名称...' : '输入负债名称...'));
 const remarkPlaceholder = computed(() => (props.type === 'asset' ? '添加投资备注...' : '添加负债备注...'));
@@ -230,22 +368,36 @@ watch(activeType, (value) => {
 watch(
   () => props.initialData,
   (newData) => {
-    const merged = {
+    const merged: FormData = {
+      id: newData?.id || '',
       name: newData?.name || '',
-      amount: newData?.amount ? String(newData.amount) : '',
-      category: newData?.category || typeOptions.value[0],
+      amount: newData?.amount !== undefined && newData?.amount !== '' ? String(newData.amount) : '',
+      category: newData?.category || String(typeOptions.value[0]),
       description: newData?.description || '',
-      date: newData?.date || defaultDate
+      date: newData?.date || defaultDate,
+      monthlyPayment: String(newData?.monthlyPayment ?? ''),
+      interestRate: String(newData?.interestRate ?? ''),
+      termMonths:
+        newData?.termMonths !== undefined && newData?.termMonths !== ''
+          ? String(newData.termMonths)
+          : '',
+      repaymentMethod: newData?.repaymentMethod === 'equal_principal' ? 'equal_principal' : 'equal_payment'
     };
     formData.value = merged;
-    activeType.value = merged.category;
+
+    const rawCat = merged.category || String(typeOptions.value[0]);
+    const normalized =
+      props.type === 'asset' ? assetCanonicalLabel(rawCat) : rawCat;
+    const opts = typeOptions.value as readonly string[];
+    activeType.value = opts.includes(normalized) ? normalized : String(typeOptions.value[0]);
+    formData.value.category = activeType.value;
 
     const [year, month, day] = merged.date.split('-');
     if (year && month && day) {
       pickerDate.value = [year, month, day];
     }
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 );
 
 watch(showPopup, (visible) => {
@@ -303,7 +455,7 @@ const submitAsset = () => {
     return;
   }
 
-  emit('submit', {
+  const payload: Record<string, unknown> = {
     name: formData.value.name.trim(),
     amount: Number(formData.value.amount),
     category: activeType.value,
@@ -311,7 +463,34 @@ const submitAsset = () => {
     date: formData.value.date,
     purchaseDate: formData.value.date,
     dueDate: formData.value.date
-  });
+  };
+
+  if (formData.value.id) {
+    payload.id = formData.value.id;
+  }
+
+  if (props.type === 'liability' && isAmortizingSheet.value) {
+    const n = Number(formData.value.termMonths || 0);
+    if (!Number.isInteger(n) || n < 1) {
+      showToast('请填写有效的总期数（月）');
+      return;
+    }
+    const rate = Number(formData.value.interestRate || 0);
+    if (rate < 0 || Number.isNaN(rate)) {
+      showToast('请填写有效的年利率');
+      return;
+    }
+    payload.termMonths = n;
+    payload.repaymentMethod = formData.value.repaymentMethod;
+    payload.interestRate = rate;
+    const pm = Number(previewMonthly.value);
+    payload.monthlyPayment = Number.isFinite(pm) ? pm : 0;
+  } else if (props.type === 'liability') {
+    payload.monthlyPayment = Number(formData.value.monthlyPayment || 0);
+    payload.interestRate = Number(formData.value.interestRate || 0);
+  }
+
+  emit('submit', payload);
 
   emit('update:modelValue', false);
 };

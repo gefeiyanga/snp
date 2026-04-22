@@ -7,28 +7,31 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "oxlint",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "vue": "^3.5.0",
+    "@vueuse/core": "^12.0.0",
+    "echarts": "^5.5.0",
     "localforage": "^1.10.0",
     "vant": "^4.9.2",
-    "@vueuse/core": "^12.0.0",
-    "vue-router": "^4.5.0",
-    "echarts": "^5.5.0",
-    "vue-echarts": "^7.0.0"
+    "vue": "^3.5.0",
+    "vue-echarts": "^7.0.0",
+    "vue-router": "^4.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@vitejs/plugin-vue": "^6.0.1",
+    "less": "^4.2.0",
+    "oxfmt": "^0.10.0",
+    "oxlint": "^0.10.0",
     "typescript": "^5.8.0",
     "unplugin-auto-import": "^0.18.0",
     "unplugin-vue-components": "^0.27.0",
     "vite": "^8.0.3",
     "vite-plugin-pwa": "^0.21.0",
-    "vue-tsc": "^3.0.0",
-    "less": "^4.2.0",
-    "oxlint": "^0.10.0",
-    "oxfmt": "^0.10.0"
+    "vitest": "3.0.9",
+    "vue-tsc": "^3.0.0"
   }
 }
