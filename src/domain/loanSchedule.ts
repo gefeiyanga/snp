@@ -123,6 +123,18 @@ export function roundMoney2(x: number): number {
   return Math.round(x * 100) / 100;
 }
 
+/** 年利率（%），仅允许非负整数或 1 位小数；空串 null；不合规 null */
+export function parseInterestRatePercent(raw: string): number | null {
+  const t = String(raw ?? '')
+    .trim()
+    .replace(/,/g, '');
+  if (t === '') return null;
+  if (!/^\d+(\.\d)?$/.test(t)) return null;
+  const n = Number(t);
+  if (Number.isNaN(n) || n < 0) return null;
+  return Math.round(n * 10) / 10;
+}
+
 export function todayYmd(d = new Date()): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');

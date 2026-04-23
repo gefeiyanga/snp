@@ -126,13 +126,14 @@
             </div>
           </div>
           <div class="form-item">
-            <div class="field-label">年利率（%）</div>
+            <div class="field-label">年利率（%，最多 1 位小数）</div>
             <div class="field-wrapper">
               <van-field
                 v-model="formData.interestRate"
-                type="digit"
+                type="text"
+                inputmode="decimal"
                 :border="false"
-                placeholder="必填"
+                placeholder="如 4.5"
                 class="form-field"
               />
             </div>
@@ -158,13 +159,14 @@
             </div>
           </div>
           <div class="form-item">
-            <div class="field-label">年利率（%）</div>
+            <div class="field-label">年利率（%，最多 1 位小数）</div>
             <div class="field-wrapper">
               <van-field
                 v-model="formData.interestRate"
-                type="digit"
+                type="text"
+                inputmode="decimal"
                 :border="false"
-                placeholder="选填"
+                placeholder="选填，如 3.6"
                 class="form-field"
               />
             </div>
@@ -200,7 +202,8 @@ import { showToast } from 'vant';
 import { assetCanonicalLabel } from '@/domain/ledgerCategories';
 import {
   firstInstallmentEqualPayment,
-  firstInstallmentEqualPrincipal
+  firstInstallmentEqualPrincipal,
+  parseInterestRatePercent
 } from '@/domain/loanSchedule';
 
 interface FormData {
@@ -325,7 +328,10 @@ const previewMonthly = computed(() => {
   if (!isAmortizingSheet.value) return '—';
   const P = Number(formData.value.amount || 0);
   const n = Number(formData.value.termMonths || 0);
-  const rate = Number(formData.value.interestRate || 0);
+  const parsed = parseInterestRatePercent(formData.value.interestRate);
+  const rateRaw = formData.value.interestRate.trim();
+  if (rateRaw !== '' && parsed === null) return '—';
+  const rate = parsed ?? 0;
   if (!P || !n || n < 1) return '—';
   try {
     const v =
@@ -475,19 +481,29 @@ const submitAsset = () => {
       showToast('请填写有效的总期数（月）');
       return;
     }
-    const rate = Number(formData.value.interestRate || 0);
-    if (rate < 0 || Number.isNaN(rate)) {
-      showToast('请填写有效的年利率');
+    const rateParsed = parseInterestRatePercent(formData.value.interestRate);
+    if (rateParsed === null) {
+      showToast('请填写有效的年利率（最多 1 位小数）');
       return;
     }
     payload.termMonths = n;
     payload.repaymentMethod = formData.value.repaymentMethod;
-    payload.interestRate = rate;
+    payload.interestRate = rateParsed;
     const pm = Number(previewMonthly.value);
     payload.monthlyPayment = Number.isFinite(pm) ? pm : 0;
   } else if (props.type === 'liability') {
     payload.monthlyPayment = Number(formData.value.monthlyPayment || 0);
-    payload.interestRate = Number(formData.value.interestRate || 0);
+    const ir = formData.value.interestRate.trim();
+    if (ir !== '') {
+      const rp = parseInterestRatePercent(formData.value.interestRate);
+      if (rp === null) {
+        showToast('年利率最多支持 1 位小数');
+        return;
+      }
+      payload.interestRate = rp;
+    } else {
+      payload.interestRate = 0;
+    }
   }
 
   emit('submit', payload);

@@ -4,6 +4,7 @@ import {
   isLegacyAmortizationRow,
   nthDueDate,
   paidPeriods,
+  parseInterestRatePercent,
   remainingAfterEqualPayment,
   remainingAfterEqualPrincipal
 } from './loanSchedule';
@@ -53,5 +54,18 @@ describe('legacy', () => {
 describe('equal principal balance', () => {
   it('decreases by P/n each period', () => {
     expect(remainingAfterEqualPrincipal(120000, 6, 24, 6)).toBeCloseTo(90000, 5);
+  });
+});
+
+describe('parseInterestRatePercent', () => {
+  it('allows integer and one decimal', () => {
+    expect(parseInterestRatePercent('')).toBeNull();
+    expect(parseInterestRatePercent('4')).toBe(4);
+    expect(parseInterestRatePercent('4.5')).toBe(4.5);
+    expect(parseInterestRatePercent(' 3.6 ')).toBe(3.6);
+  });
+  it('rejects more than one decimal', () => {
+    expect(parseInterestRatePercent('4.55')).toBeNull();
+    expect(parseInterestRatePercent('x')).toBeNull();
   });
 });
