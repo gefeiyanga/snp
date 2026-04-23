@@ -126,14 +126,14 @@
             </div>
           </div>
           <div class="form-item">
-            <div class="field-label">年利率（%，最多 1 位小数）</div>
+            <div class="field-label">年利率（%）</div>
             <div class="field-wrapper">
               <van-field
                 v-model="formData.interestRate"
                 type="text"
                 inputmode="decimal"
                 :border="false"
-                placeholder="如 4.5"
+                placeholder="必填"
                 class="form-field"
               />
             </div>
@@ -159,14 +159,14 @@
             </div>
           </div>
           <div class="form-item">
-            <div class="field-label">年利率（%，最多 1 位小数）</div>
+            <div class="field-label">年利率（%）</div>
             <div class="field-wrapper">
               <van-field
                 v-model="formData.interestRate"
                 type="text"
                 inputmode="decimal"
                 :border="false"
-                placeholder="选填，如 3.6"
+                placeholder="选填"
                 class="form-field"
               />
             </div>
@@ -483,7 +483,7 @@ const submitAsset = () => {
     }
     const rateParsed = parseInterestRatePercent(formData.value.interestRate);
     if (rateParsed === null) {
-      showToast('请填写有效的年利率（最多 1 位小数）');
+      showToast('请填写年利率');
       return;
     }
     payload.termMonths = n;
@@ -497,7 +497,7 @@ const submitAsset = () => {
     if (ir !== '') {
       const rp = parseInterestRatePercent(formData.value.interestRate);
       if (rp === null) {
-        showToast('年利率最多支持 1 位小数');
+        showToast('年利率输入有误');
         return;
       }
       payload.interestRate = rp;

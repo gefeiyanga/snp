@@ -123,7 +123,7 @@ export function roundMoney2(x: number): number {
   return Math.round(x * 100) / 100;
 }
 
-/** 年利率（%），仅允许非负整数或 1 位小数；空串 null；不合规 null */
+/** 年利率（%）解析；空串 null；不合规 null */
 export function parseInterestRatePercent(raw: string): number | null {
   const t = String(raw ?? '')
     .trim()
