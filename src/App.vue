@@ -12,7 +12,14 @@ import { RouterView } from 'vue-router'
 @import (reference) '@/styles/finance-theme.less';
 
 #app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--van-text-color);

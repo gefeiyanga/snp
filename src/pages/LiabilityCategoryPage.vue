@@ -75,6 +75,14 @@ const onSubmit = async (data: Record<string, unknown>) => {
   await load();
 };
 
+const monthlyPaymentSum = computed(() =>
+  rows.value.reduce((s, r) => s + (Number(r.monthlyPayment) || 0), 0)
+);
+
+const showMortgageCarMonthlyTotal = computed(
+  () => isAmortizingCategory(categoryName.value) && rows.value.length > 0
+);
+
 const confirmDelete = async (row: LiabilityRecord) => {
   try {
     await showConfirmDialog({
@@ -104,6 +112,10 @@ const confirmDelete = async (row: LiabilityRecord) => {
 
       <div class="hint">共 {{ rows.length }} 笔，左滑删除</div>
 
+      <div v-if="showMortgageCarMonthlyTotal" class="monthly-total-card">
+        <span class="monthly-total-value">{{ formatCurrency(monthlyPaymentSum) }}</span>
+      </div>
+
       <van-cell-group v-if="rows.length" inset class="list-group">
         <van-swipe-cell v-for="row in rows" :key="row.id">
           <div class="cell-row" role="button" tabindex="0" @click="openEdit(row)">
@@ -129,6 +141,7 @@ const confirmDelete = async (row: LiabilityRecord) => {
         v-model="showSheet"
         :title="sheetTitle"
         :mode="sheetMode"
+        :lock-category="sheetMode === 'create'"
         type="liability"
         :initial-data="sheetInitial"
         :submit-text="sheetMode === 'edit' ? '保存' : '添加负债'"
@@ -204,11 +217,33 @@ const confirmDelete = async (row: LiabilityRecord) => {
   color: #9ca3af;
 }
 
+.monthly-total-card {
+  margin: 0 16px 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: @finance-card-shadow;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.monthly-total-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #e11d48;
+  letter-spacing: -0.02em;
+}
+
 .list-group {
   margin: 0 16px;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: @finance-card-shadow;
+}
+
+.list-group :deep(.van-swipe-cell:not(:last-child) .cell-row) {
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .cell-row {

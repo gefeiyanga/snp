@@ -1,12 +1,24 @@
 /** 单条资产（与本地存储结构一致） */
+export type AssetValuationMode = 'manual_amount' | 'market_quantity';
+export type InvestmentAssetType = 'fund' | 'stock' | 'crypto';
+export type AssetCurrency = 'CNY' | 'USD' | 'USDT';
+
 export interface AssetRecord {
   id: string;
+  /** 当前展示总价值 */
   name: string;
   amount: number;
   category: string;
   description?: string;
   /** 买入 / 记账日期 */
   purchaseDate?: string;
+  valuationMode?: AssetValuationMode;
+  investmentType?: InvestmentAssetType;
+  quantity?: number;
+  unitPrice?: number;
+  costPrice?: number;
+  symbol?: string;
+  currency?: AssetCurrency;
 }
 
 /** 等额本息 / 等额本金（房贷、车贷摊销） */
@@ -46,6 +58,13 @@ export type LedgerFormPayload = {
   description?: string;
   date?: string;
   purchaseDate?: string;
+  valuationMode?: AssetValuationMode;
+  investmentType?: InvestmentAssetType;
+  quantity?: number;
+  unitPrice?: number;
+  costPrice?: number;
+  symbol?: string;
+  currency?: AssetCurrency;
   dueDate?: string;
   monthlyPayment?: number;
   interestRate?: number;

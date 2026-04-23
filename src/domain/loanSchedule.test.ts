@@ -6,7 +6,8 @@ import {
   paidPeriods,
   parseInterestRatePercent,
   remainingAfterEqualPayment,
-  remainingAfterEqualPrincipal
+  remainingAfterEqualPrincipal,
+  scheduledMonthlyPayment
 } from './loanSchedule';
 
 describe('nthDueDate', () => {
@@ -57,15 +58,38 @@ describe('equal principal balance', () => {
   });
 });
 
+describe('scheduledMonthlyPayment', () => {
+  it('等额本金：已还一期后下期月供低于首期', () => {
+    const P = 120000;
+    const n = 24;
+    const rate = 6;
+    const first = '2020-01-15';
+    const beforeFirst = scheduledMonthlyPayment(P, rate, n, 'equal_principal', first, '2020-01-14');
+    const afterFirst = scheduledMonthlyPayment(P, rate, n, 'equal_principal', first, '2020-01-20');
+    expect(afterFirst).toBeLessThan(beforeFirst);
+  });
+  it('等额本息：不同 asOf 下期月供相同', () => {
+    const P = 100000;
+    const n = 12;
+    const rate = 12;
+    const first = '2024-01-01';
+    const a = scheduledMonthlyPayment(P, rate, n, 'equal_payment', first, '2024-01-01');
+    const b = scheduledMonthlyPayment(P, rate, n, 'equal_payment', first, '2024-06-15');
+    expect(a).toBeCloseTo(b, 5);
+  });
+});
+
 describe('parseInterestRatePercent', () => {
-  it('allows integer and one decimal', () => {
+  it('allows up to three decimal places', () => {
     expect(parseInterestRatePercent('')).toBeNull();
     expect(parseInterestRatePercent('4')).toBe(4);
     expect(parseInterestRatePercent('4.5')).toBe(4.5);
     expect(parseInterestRatePercent(' 3.6 ')).toBe(3.6);
+    expect(parseInterestRatePercent('4.55')).toBe(4.55);
+    expect(parseInterestRatePercent('3.125')).toBe(3.125);
   });
-  it('rejects more than one decimal', () => {
-    expect(parseInterestRatePercent('4.55')).toBeNull();
+  it('rejects more than three fractional digits', () => {
+    expect(parseInterestRatePercent('4.5555')).toBeNull();
     expect(parseInterestRatePercent('x')).toBeNull();
   });
 });

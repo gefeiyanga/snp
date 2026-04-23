@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useStorage } from '@/composables/useStorage';
+import { useAppStorage } from '@/composables/useStorage';
 
-const { getItem, setItem } = useStorage();
+const { getItem, setItem } = useAppStorage();
 const counter = ref(0);
 const name = ref('');
 
@@ -29,7 +29,7 @@ onClickOutside(menuRef, () => {
   isOpen.value = false;
 });
 
-// 使用useStorage composable
+// 使用项目内存储 composable
 const saveName = async () => {
   if (name.value) {
     await setItem('userName', name.value);

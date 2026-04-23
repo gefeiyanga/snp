@@ -112,27 +112,56 @@ export function firstInstallmentEqualPayment(principal: number, annualPercent: n
 }
 
 export function firstInstallmentEqualPrincipal(principal: number, annualPercent: number, termMonths: number): number {
-  const P = principal;
+  return installmentEqualPrincipal(principal, annualPercent, termMonths, 1);
+}
+
+/** 等额本金：第 period 期（1-based）当期应还（固定本金 + 期初余额利息） */
+export function installmentEqualPrincipal(
+  principal: number,
+  annualPercent: number,
+  termMonths: number,
+  period1Based: number
+): number {
   const n = termMonths;
+  const p = Math.min(Math.max(period1Based, 1), n);
   const r = monthlyRateFromAnnualPercent(annualPercent);
-  const principalPart = P / n;
-  return principalPart + P * r;
+  const principalPart = principal / n;
+  const balanceBefore = principal - (p - 1) * principalPart;
+  return principalPart + balanceBefore * r;
+}
+
+/** 截至 asOf 已还 k 期后，下一期应还月供（等额本息各期相同；等额本金随期变化） */
+export function scheduledMonthlyPayment(
+  principal: number,
+  annualPercent: number,
+  termMonths: number,
+  method: RepaymentMethod,
+  firstPaymentYmd: string,
+  asOfYmd: string
+): number {
+  const k = paidPeriods(firstPaymentYmd, termMonths, asOfYmd);
+  if (k >= termMonths) return 0;
+  const nextPeriod = k + 1;
+  if (method === 'equal_payment') {
+    return firstInstallmentEqualPayment(principal, annualPercent, termMonths);
+  }
+  return installmentEqualPrincipal(principal, annualPercent, termMonths, nextPeriod);
 }
 
 export function roundMoney2(x: number): number {
   return Math.round(x * 100) / 100;
 }
 
-/** 年利率（%）解析；空串 null；不合规 null */
+/** 年利率（%）解析；空串 null；不合规 null；最多三位小数 */
 export function parseInterestRatePercent(raw: string): number | null {
   const t = String(raw ?? '')
     .trim()
     .replace(/,/g, '');
   if (t === '') return null;
-  if (!/^\d+(\.\d)?$/.test(t)) return null;
+  if (!/^\d+(\.\d{1,3})?$/.test(t)) return null;
   const n = Number(t);
   if (Number.isNaN(n) || n < 0) return null;
-  return Math.round(n * 10) / 10;
+  return Math.round(n * 1000) / 1000;
 }
 
 export function todayYmd(d = new Date()): string {
@@ -159,10 +188,7 @@ export function hydrateLiability(row: LiabilityRecord): LiabilityRecord {
   } else {
     remaining = roundMoney2(remainingAfterEqualPrincipal(P, rate, term, k));
   }
-  const mp =
-    method === 'equal_payment'
-      ? roundMoney2(firstInstallmentEqualPayment(P, rate, term))
-      : roundMoney2(firstInstallmentEqualPrincipal(P, rate, term));
+  const mp = roundMoney2(scheduledMonthlyPayment(P, rate, term, method, first, todayYmd()));
   return {
     ...row,
     remaining,

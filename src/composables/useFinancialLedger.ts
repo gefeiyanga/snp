@@ -1,5 +1,13 @@
-import { useStorage } from '@/composables/useStorage';
-import type { AssetRecord, LiabilityRecord, LedgerFormPayload, RepaymentMethod } from '@/types/ledger';
+import { useAppStorage } from '@/composables/useStorage';
+import type {
+  AssetCurrency,
+  AssetRecord,
+  AssetValuationMode,
+  InvestmentAssetType,
+  LiabilityRecord,
+  LedgerFormPayload,
+  RepaymentMethod
+} from '@/types/ledger';
 import {
   hydrateLiability,
   isAmortizingCategory,
@@ -23,11 +31,58 @@ function hasFullAmortizationPayload(data: LedgerFormPayload): boolean {
   );
 }
 
+function toMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function isInvestmentPayload(data: LedgerFormPayload): boolean {
+  return data.category === '投资' || data.valuationMode === 'market_quantity';
+}
+
+function normalizeAssetFromForm(data: LedgerFormPayload): Omit<AssetRecord, 'id'> {
+  const description = data.description ?? '';
+  const purchaseDate = data.purchaseDate ?? data.date;
+
+  if (isInvestmentPayload(data)) {
+    const quantity = Number(data.quantity ?? 0);
+    const unitPrice = Number(data.unitPrice ?? 0);
+    return {
+      name: data.name,
+      amount: toMoney(quantity * unitPrice),
+      category: '投资',
+      description,
+      purchaseDate,
+      valuationMode: 'market_quantity' as AssetValuationMode,
+      investmentType: data.investmentType as InvestmentAssetType | undefined,
+      quantity,
+      unitPrice,
+      costPrice: data.costPrice !== undefined ? Number(data.costPrice) : undefined,
+      symbol: data.symbol?.trim() || undefined,
+      currency: (data.currency as AssetCurrency | undefined) ?? 'CNY'
+    };
+  }
+
+  return {
+    name: data.name,
+    amount: Number(data.amount),
+    category: data.category,
+    description,
+    purchaseDate,
+    valuationMode: 'manual_amount',
+    investmentType: undefined,
+    quantity: undefined,
+    unitPrice: undefined,
+    costPrice: undefined,
+    symbol: undefined,
+    currency: undefined
+  };
+}
+
 /**
  * 资产：列表读写 + 单条增删改（与页面解耦，便于单测与复用）
  */
 export function useAssetRecords() {
-  const { getItem, setItem } = useStorage();
+  const { getItem, setItem } = useAppStorage();
 
   const list = async (): Promise<AssetRecord[]> => (await getItem<AssetRecord[]>(STORAGE_ASSETS)) ?? [];
 
@@ -47,7 +102,14 @@ export function useAssetRecords() {
       amount: Number(input.amount),
       category: input.category,
       description: input.description ?? '',
-      purchaseDate: input.purchaseDate
+      purchaseDate: input.purchaseDate,
+      valuationMode: input.valuationMode,
+      investmentType: input.investmentType,
+      quantity: input.quantity,
+      unitPrice: input.unitPrice,
+      costPrice: input.costPrice,
+      symbol: input.symbol,
+      currency: input.currency
     };
     const rows = await list();
     rows.push(row);
@@ -74,13 +136,7 @@ export function useAssetRecords() {
 
   /** 从底部表单保存（新增或更新） */
   const upsertFromForm = async (data: LedgerFormPayload): Promise<AssetRecord> => {
-    const base = {
-      name: data.name,
-      amount: Number(data.amount),
-      category: data.category,
-      description: data.description ?? '',
-      purchaseDate: data.purchaseDate ?? data.date
-    };
+    const base = normalizeAssetFromForm(data);
     if (data.id) {
       const updated = await update(data.id, base);
       if (updated) return updated;
@@ -95,7 +151,7 @@ export function useAssetRecords() {
  * 负债：列表读写 + 单条增删改
  */
 export function useLiabilityRecords() {
-  const { getItem, setItem } = useStorage();
+  const { getItem, setItem } = useAppStorage();
 
   async function readRaw(): Promise<LiabilityRecord[]> {
     return (await getItem<LiabilityRecord[]>(STORAGE_LIABILITIES)) ?? [];

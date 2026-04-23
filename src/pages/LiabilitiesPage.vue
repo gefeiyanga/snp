@@ -1,42 +1,47 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onActivated, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useStorage } from '@/composables/useStorage';
 import ModernBottomSheet from '@/components/ModernBottomSheet.vue';
+import { useLiabilityRecords } from '@/composables/useFinancialLedger';
+import type { LedgerFormPayload } from '@/types/ledger';
 
 const router = useRouter();
-const { getItem, setItem } = useStorage();
+const liabilityRepo = useLiabilityRecords();
 
-// 控制底部表单的显示
 const showAddLiabilitySheet = ref(false);
-
-// 负债分类数据
 const liabilitiesByCategory = ref<any[]>([]);
 
-// 负债分类
 const liabilityCategories = [
-  { name: '房贷', icon: 'home-o', iconBg: '#f3f4f6', iconColor: '#6b7280', dotColor: '#f87171' },
-  { name: '车贷', icon: 'logistics', iconBg: '#f3f4f6', iconColor: '#6b7280', dotColor: '#f87171' },
-  { name: '信用卡', icon: 'credit-pay', iconBg: '#f3f4f6', iconColor: '#6b7280', dotColor: '#f87171' },
-  { name: '其他', icon: 'more-o', iconBg: '#f3f4f6', iconColor: '#6b7280', dotColor: '#f87171' }
-];
+  { name: '房贷', icon: 'home-o', wrap: 'blue' },
+  { name: '车贷', icon: 'logistics', wrap: 'red' },
+  { name: '信用卡', icon: 'credit-pay', wrap: 'gray' },
+  { name: '其他', icon: 'more-o', wrap: 'gray' }
+] as const;
 
-// 加载负债数据
+const isMortgageOrCar = (name: string) => name === '房贷' || name === '车贷';
+
 const loadLiabilities = async () => {
-  const liabilities = await getItem<any[]>('liabilities') || [];
+  const liabilities = await liabilityRepo.list();
 
-  // 按类别整理负债
   const categorizedLiabilities: any[] = [];
-  liabilityCategories.forEach(category => {
-    const categoryLiabilities = liabilities.filter(liability => liability.category === category.name);
+  liabilityCategories.forEach((category) => {
+    const categoryLiabilities = liabilities.filter((liability) => liability.category === category.name);
     const totalAmount = categoryLiabilities.reduce((sum, liability) => sum + (liability.amount || 0), 0);
-    const remainingAmount = categoryLiabilities.reduce((sum, liability) => sum + (liability.remaining || liability.amount || 0), 0);
+    const remainingAmount = categoryLiabilities.reduce(
+      (sum, liability) => sum + (liability.remaining ?? liability.amount ?? 0),
+      0
+    );
+    const monthlyPaymentTotal = categoryLiabilities.reduce(
+      (sum, liability) => sum + (Number(liability.monthlyPayment) || 0),
+      0
+    );
 
     categorizedLiabilities.push({
       ...category,
       liabilities: categoryLiabilities,
       totalAmount,
-      remainingAmount
+      remainingAmount,
+      monthlyPaymentTotal
     });
   });
 
@@ -44,6 +49,10 @@ const loadLiabilities = async () => {
 };
 
 onMounted(() => {
+  loadLiabilities();
+});
+
+onActivated(() => {
   loadLiabilities();
 });
 
@@ -58,36 +67,27 @@ const paidAmount = computed(() =>
   )
 );
 
-// 导航到首页
+const liabilityCount = computed(() =>
+  liabilitiesByCategory.value.reduce((sum, category) => sum + category.liabilities.length, 0)
+);
+
 const goHome = () => {
   router.push('/');
 };
 
-// 添加新负债
+const goCategory = (name: string) => {
+  router.push({ name: 'LiabilityCategory', params: { name } });
+};
+
 const addLiability = () => {
   showAddLiabilitySheet.value = true;
 };
 
-// 保存新负债
-const onSaveLiability = async (data: any) => {
-  const liabilities = await getItem<any[]>('liabilities') || [];
-  const newLiability = {
-    id: Date.now().toString(), // 简单的ID生成
-    name: data.name,
-    amount: Number(data.amount),
-    category: data.category,
-    description: data.description,
-    monthlyPayment: data.monthlyPayment ? Number(data.monthlyPayment) : 0,
-    interestRate: data.interestRate ? Number(data.interestRate) : 0,
-    dueDate: data.dueDate,
-    remaining: Number(data.amount) // 初始化剩余金额为总金额
-  };
-  liabilities.push(newLiability);
-  await setItem('liabilities', liabilities);
-  loadLiabilities(); // 重新加载数据
+const onSaveLiability = async (data: Record<string, unknown>) => {
+  await liabilityRepo.upsertFromForm(data as LedgerFormPayload);
+  await loadLiabilities();
 };
 
-// 格式化数字为货币格式
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('zh-CN', {
     style: 'currency',
@@ -95,85 +95,138 @@ const formatCurrency = (value: number) => {
     minimumFractionDigits: 0
   }).format(value);
 };
+
+const categoryMeta = (category: any) => {
+  const n = category.liabilities.length;
+  const mt = Number(category.monthlyPaymentTotal) || 0;
+  if (n === 0) return '暂无';
+  if (isMortgageOrCar(category.name) && mt > 0) {
+    return formatCurrency(mt);
+  }
+  if (n === 1) {
+    const l = category.liabilities[0];
+    const org = l.description || l.name || '';
+    const monthly =
+      Number(l.monthlyPayment) > 0 ? `月供 ${formatCurrency(Number(l.monthlyPayment))}` : '';
+    return [org, monthly].filter(Boolean).join(' · ') || `${n} 笔记录`;
+  }
+  return `${n} 笔记录`;
+};
+
+const detailRows = computed(() => liabilitiesByCategory.value.filter((c) => c.liabilities.length > 0));
+
+const dotColor = (wrap: string) => {
+  if (wrap === 'blue') return '#3b82f6';
+  if (wrap === 'red') return '#f87171';
+  return '#94a3b8';
+};
 </script>
 
 <template>
   <div class="liabilities-page">
-    <van-nav-bar
-      class="nav-bar"
-      title="负债"
-      left-arrow
-      :border="false"
-      @click-left="goHome"
-    >
-      <template #right>
-        <van-icon name="plus" size="20" color="#333" @click="addLiability" />
-      </template>
-    </van-nav-bar>
+    <div class="page-max">
+    <header class="page-header safe-top sticky-head">
+      <button type="button" class="icon-btn plain" aria-label="返回" @click="goHome">
+        <van-icon name="arrow-left" size="20" color="#374151" />
+      </button>
+      <h1 class="page-title">负债</h1>
+      <button type="button" class="icon-btn" aria-label="添加负债" @click="addLiability">
+        <van-icon name="plus" size="20" color="#4b5563" />
+      </button>
+    </header>
 
-    <div class="total-card">
-      <div class="total-label">总负债</div>
-      <div class="total-amount">{{ formatCurrency(totalLiabilities) }}</div>
-      <div class="total-meta">
-        <div class="meta-item">
-          <div class="meta-label">已还金额</div>
-          <div class="meta-value paid-value">{{ formatCurrency(paidAmount) }}</div>
-        </div>
-        <div class="meta-item">
-          <div class="meta-label">负债笔数</div>
-          <div class="meta-value debt-count">{{ liabilitiesByCategory.reduce((sum, category) => sum + category.liabilities.length, 0) }}笔</div>
+    <div class="hero-wrap">
+      <div class="hero-card">
+        <div class="hero-deco hero-deco-a" aria-hidden="true" />
+        <div class="hero-deco hero-deco-b" aria-hidden="true" />
+        <p class="hero-label">总负债</p>
+        <h2 class="hero-amount">{{ formatCurrency(totalLiabilities) }}</h2>
+        <div class="hero-split">
+          <div class="hero-split-item">
+            <p class="hero-meta-label">已还金额</p>
+            <p class="hero-meta-value">{{ formatCurrency(paidAmount) }}</p>
+          </div>
+          <div class="hero-divider" />
+          <div class="hero-split-item">
+            <p class="hero-meta-label">负债笔数</p>
+            <p class="hero-meta-value">{{ liabilityCount }} 笔</p>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="section-title">负债类别</div>
-    <div class="categories-grid">
-      <div
-        v-for="(category, index) in liabilitiesByCategory"
-        :key="index"
-        class="category-card"
-      >
-        <div class="category-icon" :style="{ background: category.iconBg }">
-          <van-icon :name="category.icon" size="16" :color="category.iconColor" />
-        </div>
-        <div class="category-info">
-          <div class="category-name">{{ category.name }}</div>
-          <div class="category-value">{{ formatCurrency(category.remainingAmount) }}</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="detail-list-container">
-      <div class="detail-list-title">明细列表</div>
-      <van-cell-group :border="false">
+    <section class="section">
+      <h3 class="section-title">负债类别</h3>
+      <div class="cat-grid">
         <div
-          v-for="(category, index) in liabilitiesByCategory"
-          :key="index"
-          class="detail-row"
+          v-for="category in liabilitiesByCategory"
+          :key="category.name"
+          class="cat-card press"
+          role="button"
+          tabindex="0"
+          @click="goCategory(category.name)"
         >
-          <div class="detail-left">
-            <span class="detail-dot" :style="{ backgroundColor: category.dotColor }"></span>
+          <div class="cat-icon" :class="`wrap-${category.wrap}`">
+            <van-icon :name="category.icon" size="20" class="cat-icon-inner" />
+          </div>
+          <p class="cat-name">{{ category.name }}</p>
+          <p class="cat-value">
+            {{ category.liabilities.length ? formatCurrency(category.remainingAmount) : '暂无' }}
+          </p>
+          <p v-if="isMortgageOrCar(category.name) && category.liabilities.length" class="cat-monthly">
+            {{ formatCurrency(category.monthlyPaymentTotal) }}
+          </p>
+          <p class="cat-meta">{{ category.liabilities.length }} 笔记录</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-list">
+      <h3 class="section-title">明细列表</h3>
+      <div v-if="detailRows.length" class="list-card">
+        <div
+          v-for="(category, index) in detailRows"
+          :key="category.name"
+          class="list-row press"
+          :class="{ 'is-last': index === detailRows.length - 1 }"
+          role="button"
+          tabindex="0"
+          @click="goCategory(category.name)"
+        >
+          <div class="list-left">
+            <span class="list-dot" :style="{ backgroundColor: dotColor(category.wrap) }" />
             <div>
-              <div class="detail-name">{{ category.name }}</div>
-              <div class="detail-subtitle">{{ category.liabilities.length }}项记录</div>
+              <p class="list-name">{{ category.name }}</p>
+              <p class="list-sub">{{ categoryMeta(category) }}</p>
             </div>
           </div>
-          <div class="detail-right">
-            <span class="detail-amount">{{ formatCurrency(category.remainingAmount) }}</span>
-            <van-icon name="arrow" size="12" color="#d1d5db" />
+          <div class="list-right">
+            <span class="list-amt">{{ formatCurrency(category.remainingAmount) }}</span>
+            <van-icon name="arrow" size="14" color="#d1d5db" />
           </div>
         </div>
-      </van-cell-group>
-    </div>
+      </div>
+      <div v-else class="empty-panel">
+        <div class="empty-panel-icon">
+          <van-icon name="notes-o" size="32" color="#d1d5db" />
+        </div>
+        <h4 class="empty-panel-title">暂无负债记录</h4>
+        <p class="empty-panel-text">添加你的第一笔负债，开始管理还款计划</p>
+        <van-button type="primary" round block class="empty-cta" color="#f43f5e" @click="addLiability">
+          添加负债
+        </van-button>
+      </div>
+    </section>
 
-    <!-- 底部表单 -->
     <ModernBottomSheet
       v-model="showAddLiabilitySheet"
       title="新增负债"
+      mode="create"
       type="liability"
       submit-text="添加负债"
       @submit="onSaveLiability"
     />
+    </div>
   </div>
 </template>
 
@@ -181,70 +234,346 @@ const formatCurrency = (value: number) => {
 @import (reference) '@/styles/finance-theme.less';
 
 .liabilities-page {
-  padding-bottom: 24px;
+  min-height: 100%;
   background: @finance-page-bg;
+  padding-bottom: 32px;
+}
 
-  .nav-bar {
-    .finance-nav-bar();
+.page-max {
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+.safe-top {
+  padding-top: max(env(safe-area-inset-top, 0px), 12px);
+}
+
+.sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  border: none;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+
+  &:active {
+    background: #e5e7eb;
   }
 
-  .total-card {
-    --finance-total-card-bg: rgba(220, 38, 38, 0.08);
-    --finance-total-card-text: #111827;
-    .finance-total-card();
+  &.plain {
+    background: transparent;
 
-    .paid-value {
-      color: #111827;
-    }
-
-    .debt-count {
-      color: #111827;
+    &:active {
+      background: #f3f4f6;
     }
   }
+}
 
-  .section-title {
-    .finance-section-title();
-    color: #6b7280;
+.hero-wrap {
+  padding: 16px 20px 0;
+}
+
+.hero-card {
+  position: relative;
+  border-radius: 24px;
+  padding: 24px;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(to bottom right, #f43f5e, #db2777);
+  box-shadow: @finance-card-shadow;
+}
+
+.hero-deco {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.hero-deco-a {
+  width: 160px;
+  height: 160px;
+  right: -40px;
+  top: -40px;
+}
+
+.hero-deco-b {
+  width: 128px;
+  height: 128px;
+  left: -40px;
+  bottom: -40px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hero-label {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 500;
+}
+
+.hero-amount {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.hero-split {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.hero-split-item {
+  flex: 1;
+}
+
+.hero-divider {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 16px;
+}
+
+.hero-meta-label {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.hero-meta-value {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.section {
+  padding: 24px 20px 0;
+}
+
+.section-list {
+  margin-top: 4px;
+}
+
+.section-title {
+  margin: 0 0 12px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.cat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.cat-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: @finance-card-shadow;
+}
+
+.cat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+
+  &.wrap-blue {
+    background: #eff6ff;
   }
 
-  .categories-grid {
-    .finance-two-col-grid();
-
-    .category-card {
-      .finance-mini-card();
-
-      .category-icon {
-        .finance-icon-box();
-      }
-
-      .category-name {
-        font-size: 11px;
-        color: #6b7280;
-      }
-
-      .category-value {
-        margin-top: 2px;
-        font-size: 13px;
-        font-weight: 500;
-        color: #111827;
-      }
-    }
+  &.wrap-red {
+    background: #fef2f2;
   }
 
-  .detail-list-container {
-    .finance-detail-list-container();
-
-    .detail-name {
-      color: #111827;
-    }
-
-    .detail-subtitle {
-      color: #9ca3af;
-    }
-
-    .detail-amount {
-      color: #111827;
-    }
+  &.wrap-gray {
+    background: #f9fafb;
   }
+}
+
+.wrap-blue .cat-icon-inner {
+  color: #2563eb;
+}
+
+.wrap-red .cat-icon-inner {
+  color: #ef4444;
+}
+
+.wrap-gray .cat-icon-inner {
+  color: #6b7280;
+}
+
+.cat-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.cat-value {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.cat-monthly {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e11d48;
+}
+
+.cat-meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.list-card {
+  background: #fff;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: @finance-card-shadow;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #fafafa;
+
+  &.is-last {
+    border-bottom: none;
+  }
+
+  &:active {
+    background: #f9fafb;
+  }
+}
+
+.list-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.list-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.list-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.list-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.list-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.list-amt {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.empty-panel {
+  background: #fff;
+  border-radius: 24px;
+  padding: 32px 24px;
+  text-align: center;
+  box-shadow: @finance-card-shadow;
+}
+
+.empty-panel-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 9999px;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-panel-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.empty-panel-text {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+.empty-cta {
+  font-weight: 500;
+}
+
+.press:active {
+  transform: scale(0.99);
+  transition: transform 0.1s;
 }
 </style>

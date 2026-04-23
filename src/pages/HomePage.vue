@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onActivated, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useStorage } from '@/composables/useStorage';
+import { useAssetRecords, useLiabilityRecords } from '@/composables/useFinancialLedger';
 
 type DistributionItem = {
   name: string;
@@ -10,26 +10,31 @@ type DistributionItem = {
 };
 
 const router = useRouter();
-const { getItem } = useStorage();
+const assetsRepo = useAssetRecords();
+const liabilityRepo = useLiabilityRecords();
 
 const totalAssets = ref(0);
 const totalLiabilities = ref(0);
 const netWorth = ref(0);
 
-const assetDistribution = ref<DistributionItem[]>([
-  { name: '现金', value: 15000, color: '#10b981' },
-  { name: '银行', value: 45000, color: '#3b82f6' },
-  { name: '投资', value: 120000, color: '#f59e0b' },
-  { name: '房产', value: 2500000, color: '#8b5cf6' },
-  { name: '其他', value: 30000, color: '#ec4899' }
-]);
+const ASSET_CATEGORY_DEF: { name: string; aliases: string[]; color: string }[] = [
+  { name: '现金', aliases: ['现金'], color: '#10b981' },
+  { name: '银行', aliases: ['银行', '银行资金'], color: '#3b82f6' },
+  { name: '投资', aliases: ['投资'], color: '#f59e0b' },
+  { name: '其他', aliases: ['其他', '房产', '不动产', '汽车', '车辆'], color: '#ec4899' }
+];
 
-const liabilityDistribution = ref<DistributionItem[]>([
-  { name: '房贷', value: 1800000, color: '#3b82f6' },
-  { name: '车贷', value: 120000, color: '#f87171' }
-]);
+const LIABILITY_CATEGORY_DEF: { name: string; color: string }[] = [
+  { name: '房贷', color: '#3b82f6' },
+  { name: '车贷', color: '#f87171' },
+  { name: '信用卡', color: '#eab308' },
+  { name: '其他', color: '#94a3b8' }
+];
 
-const CHART_RADIUS = 30;
+const assetDistribution = ref<DistributionItem[]>([]);
+const liabilityDistribution = ref<DistributionItem[]>([]);
+
+const CHART_RADIUS = 38;
 const CHART_CIRCUMFERENCE = 2 * Math.PI * CHART_RADIUS;
 
 const buildDonutSegments = (list: DistributionItem[]) => {
@@ -54,17 +59,67 @@ const liabilitySegments = computed(() => buildDonutSegments(liabilityDistributio
 const assetChartTotal = computed(() => assetDistribution.value.reduce((sum, item) => sum + item.value, 0));
 const liabilityChartTotal = computed(() => liabilityDistribution.value.reduce((sum, item) => sum + item.value, 0));
 
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency: 'CNY',
+    minimumFractionDigits: 0
+  }).format(value);
+};
+
+const formatCompactWan = (value: number) => {
+  if (value >= 10000) {
+    const wan = value / 10000;
+    const text = wan >= 100 ? wan.toFixed(0) : wan.toFixed(1).replace(/\.0$/, '');
+    return `${text}万`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1).replace(/\.0$/, '')}千`;
+  }
+  return formatCurrency(value);
+};
+
+const legendPercent = (item: DistributionItem, total: number) => {
+  if (total <= 0) return '0%';
+  return `${((item.value / total) * 100).toFixed(1)}%`;
+};
+
 const fetchData = async () => {
-  const assets = (await getItem<any[]>('assets')) || [];
+  const assets = await assetsRepo.list();
+  const liabilities = await liabilityRepo.list();
+
   totalAssets.value = assets.reduce((sum, asset) => sum + (asset.amount || 0), 0);
-
-  const liabilities = (await getItem<any[]>('liabilities')) || [];
-  totalLiabilities.value = liabilities.reduce((sum, liability) => sum + (liability.amount || 0), 0);
-
+  totalLiabilities.value = liabilities.reduce((sum, liability) => sum + (liability.remaining ?? liability.amount ?? 0), 0);
   netWorth.value = totalAssets.value - totalLiabilities.value;
+
+  const assetBuckets: DistributionItem[] = [];
+  for (const def of ASSET_CATEGORY_DEF) {
+    const amount = assets
+      .filter((a) => def.aliases.includes(a.category))
+      .reduce((s, a) => s + (a.amount || 0), 0);
+    if (amount > 0) {
+      assetBuckets.push({ name: def.name, value: amount, color: def.color });
+    }
+  }
+  assetDistribution.value = assetBuckets;
+
+  const liabilityBuckets: DistributionItem[] = [];
+  for (const def of LIABILITY_CATEGORY_DEF) {
+    const amount = liabilities
+      .filter((l) => l.category === def.name)
+      .reduce((s, l) => s + (l.remaining ?? l.amount ?? 0), 0);
+    if (amount > 0) {
+      liabilityBuckets.push({ name: def.name, value: amount, color: def.color });
+    }
+  }
+  liabilityDistribution.value = liabilityBuckets;
 };
 
 onMounted(() => {
+  fetchData();
+});
+
+onActivated(() => {
   fetchData();
 });
 
@@ -75,121 +130,143 @@ const goToAssets = () => {
 const goToLiabilities = () => {
   router.push('/liabilities');
 };
-
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('zh-CN', {
-    style: 'currency',
-    currency: 'CNY',
-    minimumFractionDigits: 0
-  }).format(value);
-};
 </script>
 
 <template>
   <div class="home-page">
+    <div class="page-inner">
+      <div class="hero-bg" aria-hidden="true" />
 
-    <div class="total-card">
-      <div class="total-label">资产总览</div>
-      <div class="total-amount">{{ formatCurrency(totalAssets) }}</div>
-      <div class="total-meta">
-        <div class="meta-item">
-          <div class="meta-label">净资产</div>
-          <div class="meta-value net-value">{{ formatCurrency(netWorth) }}</div>
-        </div>
-        <div class="meta-item">
-          <div class="meta-label">总负债</div>
-          <div class="meta-value debt-value">{{ formatCurrency(totalLiabilities) }}</div>
-        </div>
-      </div>
-    </div>
+      <header class="page-header safe-top">
+        <h1 class="page-title">资产总览</h1>
+      </header>
 
-    <div class="section-title">快捷入口</div>
-    <div class="quick-actions">
-      <div class="quick-card" @click="goToAssets">
-        <div class="quick-icon asset-icon">
-          <van-icon name="gold-coin-o" size="16" color="#059669" />
-        </div>
-        <div class="quick-info">
-          <div class="quick-name">资产</div>
-          <div class="quick-subtitle">查看资产明细</div>
-        </div>
-      </div>
-      <div class="quick-card" @click="goToLiabilities">
-        <div class="quick-icon liability-icon">
-          <van-icon name="balance-o" size="16" color="#be123c" />
-        </div>
-        <div class="quick-info">
-          <div class="quick-name">负债</div>
-          <div class="quick-subtitle">查看负债明细</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section-title">分布概览</div>
-    <div class="distribution-card asset-card">
-      <div class="distribution-header">
-        <div class="distribution-title">资产分布</div>
-        <div class="distribution-total assets">{{ formatCurrency(assetChartTotal) }}</div>
-      </div>
-      <div class="distribution-body">
-        <svg viewBox="0 0 88 88" width="88" height="88" aria-label="资产分布环形图">
-          <circle cx="44" cy="44" r="30" stroke="#eef2f7" stroke-width="14" fill="none" />
-          <g transform="rotate(-90 44 44)">
-            <circle
-              v-for="(segment, index) in assetSegments"
-              :key="`asset-${index}`"
-              cx="44"
-              cy="44"
-              r="30"
-              fill="none"
-              stroke-width="14"
-              stroke-linecap="butt"
-              :stroke="segment.color"
-              :stroke-dasharray="segment.dasharray"
-              :stroke-dashoffset="segment.dashoffset"
-            />
-          </g>
-        </svg>
-        <div class="legend-list">
-          <div v-for="item in assetDistribution" :key="item.name" class="legend-item">
-            <span class="legend-dot" :style="{ backgroundColor: item.color }"></span>
-            <span>{{ item.name }} {{ item.value.toLocaleString('zh-CN') }}</span>
+      <section class="hero-card-wrap animate-in" style="animation-delay: 0.05s">
+        <div class="hero-card">
+          <div class="hero-blob hero-blob-a" aria-hidden="true" />
+          <div class="hero-blob hero-blob-b" aria-hidden="true" />
+          <div class="hero-inner">
+            <p class="hero-label">净资产</p>
+            <h2 class="hero-amount">{{ formatCurrency(netWorth) }}</h2>
+            <div class="hero-row-meta">
+              <span class="pill-muted">总资产 − 总负债</span>
+            </div>
+            <div class="hero-split">
+              <button type="button" class="hero-split-item hero-link" @click="goToAssets">
+                <span class="hero-link-head">
+                  <span class="hero-split-label">总资产</span>
+                  <van-icon name="arrow" size="14" color="#9ca3af" />
+                </span>
+                <span class="hero-split-value">{{ formatCurrency(totalAssets) }}</span>
+              </button>
+              <div class="hero-divider" />
+              <button type="button" class="hero-split-item hero-link" @click="goToLiabilities">
+                <span class="hero-link-head">
+                  <span class="hero-split-label">总负债</span>
+                  <van-icon name="arrow" size="14" color="#9ca3af" />
+                </span>
+                <span class="hero-split-value debt">{{ formatCurrency(totalLiabilities) }}</span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <div class="distribution-card liability-card">
-      <div class="distribution-header">
-        <div class="distribution-title">负债分布</div>
-        <div class="distribution-total liabilities">{{ formatCurrency(liabilityChartTotal) }}</div>
-      </div>
-      <div class="distribution-body">
-        <svg viewBox="0 0 88 88" width="88" height="88" aria-label="负债分布环形图">
-          <circle cx="44" cy="44" r="30" stroke="#eef2f7" stroke-width="14" fill="none" />
-          <g transform="rotate(-90 44 44)">
-            <circle
-              v-for="(segment, index) in liabilitySegments"
-              :key="`liability-${index}`"
-              cx="44"
-              cy="44"
-              r="30"
-              fill="none"
-              stroke-width="14"
-              stroke-linecap="butt"
-              :stroke="segment.color"
-              :stroke-dasharray="segment.dasharray"
-              :stroke-dashoffset="segment.dashoffset"
-            />
-          </g>
-        </svg>
-        <div class="legend-list">
-          <div v-for="item in liabilityDistribution" :key="item.name" class="legend-item">
-            <span class="legend-dot" :style="{ backgroundColor: item.color }"></span>
-            <span>{{ item.name }} {{ item.value.toLocaleString('zh-CN') }}</span>
+      <section class="panel animate-in" style="animation-delay: 0.1s">
+        <div class="panel-head">
+          <h3 class="panel-title">资产分布</h3>
+          <span class="panel-total assets">{{ formatCurrency(assetChartTotal) }}</span>
+        </div>
+        <div class="panel-body">
+          <div class="donut-wrap">
+            <svg class="donut-svg" viewBox="0 0 100 100" width="112" height="112" aria-label="资产分布">
+              <circle cx="50" cy="50" :r="CHART_RADIUS" fill="none" stroke="#f3f4f6" stroke-width="10" />
+              <g :transform="`rotate(-90 50 50)`">
+                <circle
+                  v-for="(segment, index) in assetSegments"
+                  :key="`a-${index}`"
+                  cx="50"
+                  cy="50"
+                  :r="CHART_RADIUS"
+                  fill="none"
+                  stroke-width="10"
+                  stroke-linecap="round"
+                  class="chart-ring"
+                  :stroke="segment.color"
+                  :stroke-dasharray="segment.dasharray"
+                  :stroke-dashoffset="segment.dashoffset"
+                />
+              </g>
+            </svg>
+            <div class="donut-center">
+              <span class="donut-center-label">总资产</span>
+              <span class="donut-center-value">{{ formatCompactWan(assetChartTotal) }}</span>
+            </div>
+          </div>
+          <div class="legend">
+            <div v-for="item in assetDistribution" :key="item.name" class="legend-row">
+              <div class="legend-left">
+                <span class="legend-dot" :style="{ backgroundColor: item.color }" />
+                <span class="legend-name">{{ item.name }}</span>
+              </div>
+              <div class="legend-right">
+                <p class="legend-amount">{{ formatCurrency(item.value) }}</p>
+                <p class="legend-pct">{{ legendPercent(item, assetChartTotal) }}</p>
+              </div>
+            </div>
+            <p v-if="!assetDistribution.length" class="empty-hint">暂无资产数据</p>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section class="panel panel-last animate-in" style="animation-delay: 0.2s">
+        <div class="panel-head">
+          <h3 class="panel-title">负债分布</h3>
+          <span class="panel-total liability">{{ formatCurrency(liabilityChartTotal) }}</span>
+        </div>
+        <div class="panel-body">
+          <div class="donut-wrap">
+            <svg class="donut-svg" viewBox="0 0 100 100" width="112" height="112" aria-label="负债分布">
+              <circle cx="50" cy="50" :r="CHART_RADIUS" fill="none" stroke="#f3f4f6" stroke-width="10" />
+              <g :transform="`rotate(-90 50 50)`">
+                <circle
+                  v-for="(segment, index) in liabilitySegments"
+                  :key="`l-${index}`"
+                  cx="50"
+                  cy="50"
+                  :r="CHART_RADIUS"
+                  fill="none"
+                  stroke-width="10"
+                  stroke-linecap="round"
+                  class="chart-ring"
+                  :stroke="segment.color"
+                  :stroke-dasharray="segment.dasharray"
+                  :stroke-dashoffset="segment.dashoffset"
+                />
+              </g>
+            </svg>
+            <div class="donut-center">
+              <span class="donut-center-label">总负债</span>
+              <span class="donut-center-value">{{ formatCompactWan(liabilityChartTotal) }}</span>
+            </div>
+          </div>
+          <div class="legend">
+            <div v-for="item in liabilityDistribution" :key="item.name" class="legend-row">
+              <div class="legend-left">
+                <span class="legend-dot" :style="{ backgroundColor: item.color }" />
+                <span class="legend-name">{{ item.name }}</span>
+              </div>
+              <div class="legend-right">
+                <p class="legend-amount">{{ formatCurrency(item.value) }}</p>
+                <p class="legend-pct">{{ legendPercent(item, liabilityChartTotal) }}</p>
+              </div>
+            </div>
+            <p v-if="!liabilityDistribution.length" class="empty-hint">暂无负债数据</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="bottom-spacer" />
     </div>
   </div>
 </template>
@@ -197,162 +274,353 @@ const formatCurrency = (value: number) => {
 <style lang="less" scoped>
 @import (reference) '@/styles/finance-theme.less';
 
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .home-page {
+  min-height: 100%;
   background: @finance-page-bg;
-  padding-bottom: 24px;
-  box-sizing: border-box;
-}
-
-.top-nav {
-  .finance-nav-bar();
-}
-
-.total-card {
-  --finance-total-card-bg: #e7efff;
-  --finance-total-card-text: #1e3a8a;
-  .finance-total-card();
-
-  .net-value {
-    color: #047857;
-  }
-
-  .debt-value {
-    color: #be123c;
-  }
-}
-
-.section-title {
-  .finance-section-title();
-}
-
-.quick-actions {
-  margin: 0 16px 12px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.quick-card {
-  .finance-mini-card();
-}
-
-.quick-icon {
-  .finance-icon-box();
-}
-
-.asset-icon {
-  background: #ecfdf5;
-}
-
-.liability-icon {
-  background: #fff1f2;
-}
-
-.quick-name {
-  font-size: 13px;
   color: #111827;
+  position: relative;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.page-inner {
+  max-width: 28rem;
+  margin: 0 auto;
+  position: relative;
+  overflow: hidden;
+  min-height: 100%;
+}
+
+.hero-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 18rem;
+  background: linear-gradient(to bottom, #2563eb, #3b82f6, #f9fafb);
+  opacity: 0.03;
+  pointer-events: none;
+}
+
+.safe-top {
+  padding-top: max(env(safe-area-inset-top, 0px), 12px);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 20px 8px;
+  position: relative;
+  z-index: 2;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 9999px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+
+  &:active {
+    background: #e5e7eb;
+  }
+}
+
+.animate-in {
+  opacity: 0;
+  animation: fade-up 0.5s ease forwards;
+}
+
+.hero-card-wrap {
+  padding: 0 20px;
+  margin-top: 8px;
+}
+
+.hero-card {
+  position: relative;
+  background: #fff;
+  border-radius: 24px;
+  padding: 24px;
+  overflow: hidden;
+  box-shadow: @finance-card-shadow;
+}
+
+.hero-blob {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+}
+
+.hero-blob-a {
+  right: -32px;
+  top: -32px;
+  width: 128px;
+  height: 128px;
+  background: #eff6ff;
+  opacity: 0.6;
+}
+
+.hero-blob-b {
+  right: -16px;
+  bottom: -16px;
+  width: 96px;
+  height: 96px;
+  background: #ecfdf5;
+  opacity: 0.4;
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-label {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: #6b7280;
   font-weight: 500;
 }
 
-.quick-subtitle {
-  margin-top: 2px;
-  font-size: 11px;
+.hero-amount {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #111827;
+}
+
+.hero-row-meta {
+  margin-top: 12px;
+}
+
+.pill-muted {
+  font-size: 12px;
   color: #9ca3af;
 }
 
-.distribution-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 14px;
-  border: 1px solid #e8eaef;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
-}
-
-.asset-card {
-  margin: 0 16px 10px;
-}
-
-.liability-card {
-  margin: 0 16px 16px;
-}
-
-.distribution-header {
+.hero-split {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #f3f4f6;
 }
 
-.distribution-title {
-  font-size: 13px;
-  font-weight: 500;
+.hero-split-item {
+  flex: 1;
+}
+
+.hero-link {
+  border: none;
+  background: transparent;
+  padding: 8px 0;
+  text-align: left;
+  cursor: pointer;
+
+  &:active {
+    opacity: 0.72;
+  }
+}
+
+.hero-link-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hero-divider {
+  width: 1px;
+  background: #f3f4f6;
+  margin: 0 16px;
+}
+
+.hero-split-label {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.hero-split-value {
+  display: block;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+
+  &.debt {
+    color: #e11d48;
+  }
+}
+
+.press:active {
+  transform: scale(0.98);
+  transition: transform 0.1s;
+}
+
+.panel {
+  margin: 24px 20px 0;
+  background: #fff;
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: @finance-card-shadow;
+}
+
+.panel-last {
+  margin-bottom: 20px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
   color: #111827;
 }
 
-.distribution-total {
-  font-size: 12px;
-  font-weight: 500;
+.panel-total {
+  font-size: 14px;
+  font-weight: 600;
 
   &.assets {
-    color: #10b981;
+    color: #059669;
   }
 
-  &.liabilities {
-    color: #f87171;
+  &.liability {
+    color: #e11d48;
   }
 }
 
-.distribution-body {
+.panel-body {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 20px;
 }
 
-.legend-list {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #6b7280;
-
-  span:not(.legend-dot) {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-}
-
-.legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.donut-wrap {
+  position: relative;
+  width: 112px;
+  height: 112px;
   flex-shrink: 0;
 }
 
-@media (max-width: 360px) {
-  .total-card .total-amount {
-    font-size: 24px;
-  }
+.donut-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-@media (max-height: 760px) {
-  .asset-card {
-    margin-bottom: 8px;
-  }
+.chart-ring {
+  transition: stroke-dasharray 0.6s ease;
+}
 
-  .liability-card {
-    margin-bottom: 10px;
-  }
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
 
-  .distribution-card {
-    padding: 12px;
-  }
+.donut-center-label {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.donut-center-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.legend {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.legend-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.legend-name {
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.legend-right {
+  text-align: right;
+}
+
+.legend-amount {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.legend-pct {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.empty-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.bottom-spacer {
+  height: 8px;
 }
 </style>

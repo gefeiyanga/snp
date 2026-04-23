@@ -20,6 +20,15 @@ Install dependencies with pnpm:
 pnpm install
 ```
 
+Create a `.env.local` file if you want real-time quote lookup for investment assets:
+```bash
+VITE_ALPHA_VANTAGE_API_KEY=your_api_key_here
+```
+
+This project currently integrates Alpha Vantage for quote lookup:
+- Stocks / funds: `GLOBAL_QUOTE`
+- Crypto: `CURRENCY_EXCHANGE_RATE`
+
 ## Development
 
 Start the development server:

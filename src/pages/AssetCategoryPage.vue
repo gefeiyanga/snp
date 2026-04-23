@@ -19,12 +19,6 @@ const sheetTitle = ref('新增资产');
 const sheetMode = ref<'create' | 'edit'>('create');
 const sheetKey = ref('new');
 const sheetInitial = ref<Record<string, unknown>>({});
-const showTypeSelector = ref(false);
-
-const assetTypeActions = [
-  { name: '普通资产', value: 'regular' },
-  { name: '投资资产', value: 'investment' }
-];
 
 const load = async () => {
   const all = await assetsRepo.list();
@@ -46,37 +40,20 @@ const goBack = () => {
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 0 }).format(value);
 
+const investmentSummary = (row: AssetRecord) => {
+  if (row.category !== '投资' || !row.quantity) return row.description || '无备注';
+  const typeLabel =
+    row.investmentType === 'fund' ? '基金' : row.investmentType === 'stock' ? '股票' : '加密货币';
+  const priceText = row.unitPrice ? `单价 ${formatCurrency(row.unitPrice)}` : '';
+  return [row.symbol || row.name, `${row.quantity}`, row.currency, typeLabel, priceText].filter(Boolean).join(' · ');
+};
+
 const openCreate = () => {
   sheetMode.value = 'create';
   sheetTitle.value = '新增资产';
   sheetKey.value = `create-${Date.now()}`;
   sheetInitial.value = { category: groupName.value };
   showSheet.value = true;
-};
-
-const openAddMenu = () => {
-  if (groupName.value === '投资') {
-    showTypeSelector.value = true;
-  } else {
-    openCreate();
-  }
-};
-
-const onSelectAssetType = (action: { name: string }) => {
-  showTypeSelector.value = false;
-  if (action.name === '普通资产') {
-    sheetMode.value = 'create';
-    sheetTitle.value = '新增资产';
-    sheetKey.value = `create-${Date.now()}`;
-    sheetInitial.value = { category: groupName.value };
-    showSheet.value = true;
-  } else if (action.name === '投资资产') {
-    sheetMode.value = 'create';
-    sheetTitle.value = '新增投资资产';
-    sheetKey.value = `create-${Date.now()}`;
-    sheetInitial.value = { category: '投资' };
-    showSheet.value = true;
-  }
 };
 
 const openEdit = (row: AssetRecord) => {
@@ -89,7 +66,14 @@ const openEdit = (row: AssetRecord) => {
     amount: row.amount,
     category: row.category,
     description: row.description ?? '',
-    date: row.purchaseDate ?? ''
+    date: row.purchaseDate ?? '',
+    valuationMode: row.valuationMode,
+    investmentType: row.investmentType,
+    quantity: row.quantity,
+    unitPrice: row.unitPrice,
+    costPrice: row.costPrice,
+    symbol: row.symbol,
+    currency: row.currency
   };
   showSheet.value = true;
 };
@@ -121,7 +105,7 @@ const confirmDelete = async (row: AssetRecord) => {
           <van-icon name="arrow-left" size="20" color="#374151" />
         </button>
         <h1 class="page-title">{{ groupName }} · 明细</h1>
-        <button type="button" class="icon-btn" aria-label="新增" @click="openAddMenu">
+        <button type="button" class="icon-btn" aria-label="新增" @click="openCreate">
           <van-icon name="plus" size="20" color="#4b5563" />
         </button>
       </header>
@@ -133,7 +117,7 @@ const confirmDelete = async (row: AssetRecord) => {
           <div class="cell-row" role="button" tabindex="0" @click="openEdit(row)">
             <div>
               <div class="cell-title">{{ row.name }}</div>
-              <div class="cell-sub">{{ row.description || '无备注' }}</div>
+              <div class="cell-sub">{{ investmentSummary(row) }}</div>
             </div>
             <div class="cell-amt">{{ formatCurrency(row.amount) }}</div>
           </div>
@@ -145,19 +129,12 @@ const confirmDelete = async (row: AssetRecord) => {
 
       <div v-else class="empty">该类别下暂无记录，点击右上角添加</div>
 
-      <van-action-sheet
-        v-model:show="showTypeSelector"
-        :actions="assetTypeActions"
-        cancel-text="取消"
-        @cancel="showTypeSelector = false"
-        @select="onSelectAssetType"
-      />
-
       <ModernBottomSheet
         :key="sheetKey"
         v-model="showSheet"
         :title="sheetTitle"
         :mode="sheetMode"
+        :lock-category="sheetMode === 'create'"
         type="asset"
         :initial-data="sheetInitial"
         :submit-text="sheetMode === 'edit' ? '保存' : '添加资产'"
@@ -238,6 +215,10 @@ const confirmDelete = async (row: AssetRecord) => {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: @finance-card-shadow;
+}
+
+.list-group :deep(.van-swipe-cell:not(:last-child) .cell-row) {
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .cell-row {

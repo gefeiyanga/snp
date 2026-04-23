@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { useStorage } from '@/composables/useStorage';
+import { useAppStorage } from '@/composables/useStorage';
 
-const { getItem, setItem, removeItem, clear, length, keys } = useStorage();
+const { getItem, setItem, removeItem, clear, length, keys } = useAppStorage();
 const inputValue = ref('');
 const storedValue = ref('');
 const allKeys = ref<string[]>([]);

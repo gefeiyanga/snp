@@ -16,7 +16,7 @@ export interface StorageItem {
 /**
  * Composable function to interact with localforage
  */
-export function useStorage() {
+export function useAppStorage() {
   /**
    * Get an item from storage
    * @param key The key to retrieve
