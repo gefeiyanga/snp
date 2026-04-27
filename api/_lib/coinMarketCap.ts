@@ -47,7 +47,7 @@ export function normalizeCoinMarketCapQuote(
   }
 
   const asOf =
-    typeof quote.last_updated === 'string' ? quote.last_updated : undefined;
+    typeof quote?.last_updated === 'string' ? quote.last_updated : undefined;
 
   return {
     price,
