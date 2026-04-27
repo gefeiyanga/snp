@@ -50,6 +50,17 @@ The Vercel Function will:
 
 The browser never receives the CoinMarketCap key.
 
+## 4.1 Provider Flexibility
+
+CoinMarketCap is the first crypto quote provider, not a permanent frontend contract.
+
+Implementation must keep a provider boundary:
+
+- The frontend only depends on `/api/crypto/quote` and the normalized `{ price, source, asOf, symbol, convert }` response.
+- CoinMarketCap-specific URLs, headers, response fields, and error mapping stay inside the server-side provider adapter.
+- The Vercel Function calls a provider function through a small internal contract, so a future provider can be added or swapped without changing Vue components.
+- Provider-specific source names may change internally, but UI behavior should depend on price availability and user-safe errors, not on CoinMarketCap response shape.
+
 ## 5. Environment Variables
 
 Use this variable name:
