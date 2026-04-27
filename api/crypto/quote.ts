@@ -44,6 +44,7 @@ export default async function handler(
       return;
     }
 
-    response.status(502).json({ error: '加密货币行情查询失败，请稍后再试' });
+    console.error('CoinMarketCap quote lookup failed', error);
+    response.status(502).json({ error: '无法连接 CoinMarketCap，请检查本机网络/代理或稍后再试' });
   }
 }
