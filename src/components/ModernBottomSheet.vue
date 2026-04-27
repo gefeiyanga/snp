@@ -579,7 +579,10 @@ watch(showPopup, (visible) => {
   if (visible) {
     dragOffsetY.value = 0;
     isDragging.value = false;
-    quoteStatusText.value = requiresApiKey.value && !hasMarketDataApiKey() ? '股票/基金需配置 API Key；加密货币免 Key' : '可按类型查询价格';
+    quoteStatusText.value =
+      requiresApiKey.value && !hasMarketDataApiKey()
+        ? '股票/基金需配置 API Key；加密货币走 CoinMarketCap 代理'
+        : '可按类型查询价格';
   }
 });
 
@@ -589,9 +592,9 @@ watch(
     if (!isInvestmentAsset.value) return;
     quoteStatusText.value =
       requiresApiKeyForInvestmentType(value) && !hasMarketDataApiKey()
-        ? '股票/基金需配置 API Key；加密货币免 Key'
+        ? '股票/基金需配置 API Key；加密货币走 CoinMarketCap 代理'
         : value === 'crypto'
-          ? '加密货币走 Binance 免 Key'
+          ? '加密货币走 CoinMarketCap 代理'
           : '可按类型查询价格';
   },
   { immediate: true }
