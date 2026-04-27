@@ -1,7 +1,7 @@
 import type { AssetCurrency, InvestmentAssetType } from '@/types/ledger';
 
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
-const BINANCE_BASE_URL = 'https://api.binance.com/api/v3/ticker/price';
+const CRYPTO_QUOTE_API_PATH = '/api/crypto/quote';
 
 type QuoteLookupParams = {
   symbol: string;
@@ -11,8 +11,13 @@ type QuoteLookupParams = {
 
 type QuoteLookupResult = {
   price: number;
-  source: 'alpha_vantage' | 'binance';
+  source: 'alpha_vantage' | 'coinmarketcap';
   asOf?: string;
+};
+
+type CryptoQuoteApiResult = QuoteLookupResult & {
+  symbol?: string;
+  convert?: string;
 };
 
 function getApiKey(): string {
@@ -25,6 +30,15 @@ function assertApiKey(): string {
     throw new Error('缺少 VITE_ALPHA_VANTAGE_API_KEY');
   }
   return apiKey;
+}
+
+async function readErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const data = await response.json();
+    return typeof data?.error === 'string' && data.error ? data.error : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 async function fetchAlphaVantage(params: Record<string, string>): Promise<any> {
@@ -93,16 +107,16 @@ async function fetchFundQuote(symbol: string): Promise<QuoteLookupResult> {
 }
 
 async function fetchCryptoQuote(symbol: string, currency: AssetCurrency): Promise<QuoteLookupResult> {
-  const quoteSymbol = `${symbol}${currency}`;
-  const url = new URL(BINANCE_BASE_URL);
-  url.searchParams.set('symbol', quoteSymbol);
-
-  const response = await fetch(url.toString());
+  const searchParams = new URLSearchParams({
+    symbol,
+    convert: currency
+  });
+  const response = await fetch(`${CRYPTO_QUOTE_API_PATH}?${searchParams.toString()}`);
   if (!response.ok) {
-    throw new Error(`加密货币行情请求失败：HTTP ${response.status}`);
+    throw new Error(await readErrorMessage(response, `加密货币行情请求失败：HTTP ${response.status}`));
   }
 
-  const data = await response.json();
+  const data = (await response.json()) as CryptoQuoteApiResult;
   const price = Number(data?.price);
   if (!Number.isFinite(price) || price <= 0) {
     throw new Error('未查到有效价格，请确认代码和币种');
@@ -110,7 +124,8 @@ async function fetchCryptoQuote(symbol: string, currency: AssetCurrency): Promis
 
   return {
     price,
-    source: 'binance'
+    source: 'coinmarketcap',
+    asOf: data.asOf
   };
 }
 
