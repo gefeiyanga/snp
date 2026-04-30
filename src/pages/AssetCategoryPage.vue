@@ -25,8 +25,15 @@ const load = async () => {
   rows.value = all.filter((a) => assetMatchesGroupLabel(a.category, groupName.value));
 };
 
+let stopQuoteRefreshListener: (() => void) | undefined;
+
 onMounted(() => {
   load();
+  stopQuoteRefreshListener = onInvestmentQuotesRefreshed(load);
+});
+
+onUnmounted(() => {
+  stopQuoteRefreshListener?.();
 });
 
 onActivated(() => {

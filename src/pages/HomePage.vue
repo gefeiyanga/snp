@@ -115,8 +115,15 @@ const fetchData = async () => {
   liabilityDistribution.value = liabilityBuckets;
 };
 
+let stopQuoteRefreshListener: (() => void) | undefined;
+
 onMounted(() => {
   fetchData();
+  stopQuoteRefreshListener = onInvestmentQuotesRefreshed(fetchData);
+});
+
+onUnmounted(() => {
+  stopQuoteRefreshListener?.();
 });
 
 onActivated(() => {

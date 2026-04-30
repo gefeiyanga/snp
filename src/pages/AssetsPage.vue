@@ -71,8 +71,15 @@ const loadAssets = async () => {
   netWorth.value = totalAssets.value - totalLiabilities.value;
 };
 
+let stopQuoteRefreshListener: (() => void) | undefined;
+
 onMounted(() => {
   loadAssets();
+  stopQuoteRefreshListener = onInvestmentQuotesRefreshed(loadAssets);
+});
+
+onUnmounted(() => {
+  stopQuoteRefreshListener?.();
 });
 
 onActivated(() => {

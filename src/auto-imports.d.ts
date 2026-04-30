@@ -56,6 +56,7 @@ declare global {
   const onDeactivated: typeof import('vue')['onDeactivated']
   const onElementRemoval: typeof import('@vueuse/core')['onElementRemoval']
   const onErrorCaptured: typeof import('vue')['onErrorCaptured']
+  const onInvestmentQuotesRefreshed: typeof import('./composables/useInvestmentQuoteAutoRefresh')['onInvestmentQuotesRefreshed']
   const onKeyStroke: typeof import('@vueuse/core')['onKeyStroke']
   const onLongPress: typeof import('@vueuse/core')['onLongPress']
   const onMounted: typeof import('vue')['onMounted']
@@ -185,6 +186,7 @@ declare global {
   const useIntersectionObserver: typeof import('@vueuse/core')['useIntersectionObserver']
   const useInterval: typeof import('@vueuse/core')['useInterval']
   const useIntervalFn: typeof import('@vueuse/core')['useIntervalFn']
+  const useInvestmentQuoteAutoRefresh: typeof import('./composables/useInvestmentQuoteAutoRefresh')['useInvestmentQuoteAutoRefresh']
   const useKeyModifier: typeof import('@vueuse/core')['useKeyModifier']
   const useLastChanged: typeof import('@vueuse/core')['useLastChanged']
   const useLiabilityRecords: typeof import('./composables/useFinancialLedger')['useLiabilityRecords']
@@ -354,6 +356,7 @@ declare module 'vue' {
     readonly onDeactivated: UnwrapRef<typeof import('vue')['onDeactivated']>
     readonly onElementRemoval: UnwrapRef<typeof import('@vueuse/core')['onElementRemoval']>
     readonly onErrorCaptured: UnwrapRef<typeof import('vue')['onErrorCaptured']>
+    readonly onInvestmentQuotesRefreshed: UnwrapRef<typeof import('./composables/useInvestmentQuoteAutoRefresh')['onInvestmentQuotesRefreshed']>
     readonly onKeyStroke: UnwrapRef<typeof import('@vueuse/core')['onKeyStroke']>
     readonly onLongPress: UnwrapRef<typeof import('@vueuse/core')['onLongPress']>
     readonly onMounted: UnwrapRef<typeof import('vue')['onMounted']>
@@ -483,6 +486,7 @@ declare module 'vue' {
     readonly useIntersectionObserver: UnwrapRef<typeof import('@vueuse/core')['useIntersectionObserver']>
     readonly useInterval: UnwrapRef<typeof import('@vueuse/core')['useInterval']>
     readonly useIntervalFn: UnwrapRef<typeof import('@vueuse/core')['useIntervalFn']>
+    readonly useInvestmentQuoteAutoRefresh: UnwrapRef<typeof import('./composables/useInvestmentQuoteAutoRefresh')['useInvestmentQuoteAutoRefresh']>
     readonly useKeyModifier: UnwrapRef<typeof import('@vueuse/core')['useKeyModifier']>
     readonly useLastChanged: UnwrapRef<typeof import('@vueuse/core')['useLastChanged']>
     readonly useLiabilityRecords: UnwrapRef<typeof import('./composables/useFinancialLedger')['useLiabilityRecords']>

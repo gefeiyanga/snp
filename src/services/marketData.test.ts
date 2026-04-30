@@ -53,9 +53,61 @@ describe('marketData crypto lookup', () => {
     ).rejects.toThrow('CoinMarketCap 查询频率受限，请稍后再试');
   });
 
-  it('requires browser-visible api keys only for stocks and funds', () => {
+  it('does not require browser-visible api keys for market lookups', () => {
     expect(requiresApiKeyForInvestmentType('crypto')).toBe(false);
-    expect(requiresApiKeyForInvestmentType('stock')).toBe(true);
-    expect(requiresApiKeyForInvestmentType('fund')).toBe(true);
+    expect(requiresApiKeyForInvestmentType('stock')).toBe(false);
+    expect(requiresApiKeyForInvestmentType('fund')).toBe(false);
+  });
+
+  it('looks up fund prices from Eastmoney pingzhongdata', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        price: 1.2512,
+        source: 'eastmoney',
+        asOf: '2024-04-28',
+        symbol: '000001'
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await lookupInvestmentQuote({
+      symbol: ' 000001 ',
+      investmentType: 'fund',
+      currency: 'CNY'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/eastmoney/quote?symbol=000001');
+    expect(result).toEqual({
+      price: 1.2512,
+      source: 'eastmoney',
+      asOf: '2024-04-28'
+    });
+  });
+
+  it('looks up stock prices from Eastmoney pingzhongdata', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        price: 12.34,
+        source: 'eastmoney',
+        asOf: '2024-04-28',
+        symbol: '600519'
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await lookupInvestmentQuote({
+      symbol: '600519',
+      investmentType: 'stock',
+      currency: 'CNY'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/eastmoney/quote?symbol=600519');
+    expect(result).toEqual({
+      price: 12.34,
+      source: 'eastmoney',
+      asOf: '2024-04-28'
+    });
   });
 });
