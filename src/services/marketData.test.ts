@@ -7,17 +7,26 @@ describe('marketData crypto lookup', () => {
     vi.unstubAllGlobals();
   });
 
-  it('calls the local crypto quote api with normalized symbol and currency', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        price: 65000.12,
-        source: 'coinmarketcap',
-        asOf: '2026-04-27T10:12:30.000Z',
-        symbol: 'BTC',
-        convert: 'USD'
+  it('calls the local crypto quote api in USDT and converts the result to CNY', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          price: 65000.12,
+          source: 'coinmarketcap',
+          asOf: '2026-04-27T10:12:30.000Z',
+          symbol: 'BTC',
+          convert: 'USDT'
+        })
       })
-    });
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          rate: 7.25,
+          asOf: '2026-04-27T10:40:30.000Z'
+        })
+      });
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await lookupInvestmentQuote({
@@ -26,11 +35,16 @@ describe('marketData crypto lookup', () => {
       currency: 'USD'
     });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/crypto/quote?symbol=BTC&convert=USD');
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/crypto/quote?symbol=BTC&convert=USDT');
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/fx/usdt-cny'
+    );
     expect(result).toEqual({
       price: 65000.12,
       source: 'coinmarketcap',
-      asOf: '2026-04-27T10:12:30.000Z'
+      asOf: '2026-04-27T10:12:30.000Z',
+      exchangeRate: 7.25
     });
   });
 
@@ -55,11 +69,10 @@ describe('marketData crypto lookup', () => {
 
   it('does not require browser-visible api keys for market lookups', () => {
     expect(requiresApiKeyForInvestmentType('crypto')).toBe(false);
-    expect(requiresApiKeyForInvestmentType('stock')).toBe(false);
-    expect(requiresApiKeyForInvestmentType('fund')).toBe(false);
+    expect(requiresApiKeyForInvestmentType('security')).toBe(false);
   });
 
-  it('looks up fund prices from Eastmoney pingzhongdata', async () => {
+  it('looks up stock/fund prices from Eastmoney pingzhongdata', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -73,7 +86,7 @@ describe('marketData crypto lookup', () => {
 
     const result = await lookupInvestmentQuote({
       symbol: ' 000001 ',
-      investmentType: 'fund',
+      investmentType: 'security',
       currency: 'CNY'
     });
 
@@ -85,7 +98,7 @@ describe('marketData crypto lookup', () => {
     });
   });
 
-  it('looks up stock prices from Eastmoney pingzhongdata', async () => {
+  it('keeps legacy stock/fund investment types compatible', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({

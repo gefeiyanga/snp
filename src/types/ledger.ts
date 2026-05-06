@@ -1,6 +1,7 @@
 /** 单条资产（与本地存储结构一致） */
 export type AssetValuationMode = 'manual_amount' | 'market_quantity';
-export type InvestmentAssetType = 'fund' | 'stock' | 'crypto';
+export type LegacyInvestmentAssetType = 'fund' | 'stock';
+export type InvestmentAssetType = 'security' | 'crypto' | LegacyInvestmentAssetType;
 export type AssetCurrency = 'CNY' | 'USD' | 'USDT';
 
 export interface AssetRecord {
@@ -16,6 +17,10 @@ export interface AssetRecord {
   investmentType?: InvestmentAssetType;
   quantity?: number;
   unitPrice?: number;
+  /** 价格币种到人民币的汇率；加密货币为 USDT/CNY */
+  exchangeRate?: number;
+  /** 最近一次价格更新时间，优先使用行情源返回的时间 */
+  quoteUpdatedAt?: string;
   costPrice?: number;
   symbol?: string;
   currency?: AssetCurrency;
@@ -62,6 +67,8 @@ export type LedgerFormPayload = {
   investmentType?: InvestmentAssetType;
   quantity?: number;
   unitPrice?: number;
+  exchangeRate?: number;
+  quoteUpdatedAt?: string;
   costPrice?: number;
   symbol?: string;
   currency?: AssetCurrency;

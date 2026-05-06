@@ -30,7 +30,7 @@ describe('asset quote refresh', () => {
         amount: 300,
         category: '投资',
         valuationMode: 'market_quantity',
-        investmentType: 'fund',
+        investmentType: 'security',
         quantity: 100,
         unitPrice: 3,
         symbol: '000001',
@@ -42,44 +42,81 @@ describe('asset quote refresh', () => {
         amount: 500,
         category: '投资',
         valuationMode: 'market_quantity',
+        investmentType: 'security',
+        quantity: 10,
+        unitPrice: 50,
+        currency: 'CNY'
+      },
+      {
+        id: 'stock-1',
+        name: 'Stock',
+        amount: 500,
+        category: '投资',
+        valuationMode: 'market_quantity',
         investmentType: 'stock',
         quantity: 10,
         unitPrice: 50,
+        symbol: '600519',
         currency: 'CNY'
       }
     ];
     const lookupQuote = vi
       .fn()
-      .mockResolvedValueOnce({ price: 65000, source: 'coinmarketcap' })
-      .mockResolvedValueOnce({ price: 3.456, source: 'eastmoney' });
+      .mockResolvedValueOnce({
+        price: 65000,
+        source: 'coinmarketcap',
+        asOf: '2026-04-27T10:00:00.000Z',
+        exchangeRate: 7.25
+      })
+      .mockResolvedValueOnce({ price: 3.456, source: 'eastmoney', asOf: '2026-04-28' })
+      .mockResolvedValueOnce({ price: 52, source: 'eastmoney', asOf: '2026-04-29' });
 
     const result = await refreshInvestmentAssetQuotes(assets, lookupQuote);
 
-    expect(lookupQuote).toHaveBeenCalledTimes(2);
+    expect(lookupQuote).toHaveBeenCalledTimes(3);
     expect(lookupQuote).toHaveBeenNthCalledWith(1, {
       symbol: 'btc',
       investmentType: 'crypto',
-      currency: 'USD'
+      currency: 'CNY'
     });
     expect(lookupQuote).toHaveBeenNthCalledWith(2, {
       symbol: '000001',
-      investmentType: 'fund',
+      investmentType: 'security',
       currency: 'CNY'
     });
-    expect(result.refreshed).toBe(2);
+    expect(lookupQuote).toHaveBeenNthCalledWith(3, {
+      symbol: '600519',
+      investmentType: 'security',
+      currency: 'CNY'
+    });
+    expect(result.refreshed).toBe(3);
     expect(result.assets).toEqual([
       assets[0],
       {
         ...assets[1],
         unitPrice: 65000,
-        amount: 130000
+        exchangeRate: 7.25,
+        currency: 'USDT',
+        quoteUpdatedAt: '2026-04-27T10:00:00.000Z',
+        amount: 942500
       },
       {
         ...assets[2],
         unitPrice: 3.456,
+        exchangeRate: undefined,
+        currency: 'CNY',
+        quoteUpdatedAt: '2026-04-28',
         amount: 345.6
       },
-      assets[3]
+      assets[3],
+      {
+        ...assets[4],
+        unitPrice: 52,
+        exchangeRate: undefined,
+        currency: 'CNY',
+        quoteUpdatedAt: '2026-04-29',
+        amount: 520
+      }
     ]);
   });
 
@@ -103,7 +140,7 @@ describe('asset quote refresh', () => {
         amount: 200,
         category: '投资',
         valuationMode: 'market_quantity',
-        investmentType: 'fund',
+        investmentType: 'security',
         quantity: 10,
         unitPrice: 20,
         symbol: '000001',
@@ -113,7 +150,7 @@ describe('asset quote refresh', () => {
     const lookupQuote = vi
       .fn()
       .mockRejectedValueOnce(new Error('quote failed'))
-      .mockResolvedValueOnce({ price: 21, source: 'eastmoney' });
+      .mockResolvedValueOnce({ price: 21, source: 'eastmoney', asOf: '2026-04-28' });
 
     const result = await refreshInvestmentAssetQuotes(assets, lookupQuote);
 
@@ -124,6 +161,9 @@ describe('asset quote refresh', () => {
       {
         ...assets[1],
         unitPrice: 21,
+        exchangeRate: undefined,
+        currency: 'CNY',
+        quoteUpdatedAt: '2026-04-28',
         amount: 210
       }
     ]);

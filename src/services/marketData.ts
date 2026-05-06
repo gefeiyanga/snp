@@ -2,6 +2,7 @@ import type { AssetCurrency, InvestmentAssetType } from '@/types/ledger';
 
 const EASTMONEY_QUOTE_API_PATH = '/api/eastmoney/quote';
 const CRYPTO_QUOTE_API_PATH = '/api/crypto/quote';
+const USDT_CNY_RATE_API_PATH = '/api/fx/usdt-cny';
 
 type QuoteLookupParams = {
   symbol: string;
@@ -13,6 +14,7 @@ type QuoteLookupResult = {
   price: number;
   source: 'eastmoney' | 'coinmarketcap';
   asOf?: string;
+  exchangeRate?: number;
 };
 
 type QuoteApiResult = QuoteLookupResult & {
@@ -49,10 +51,28 @@ async function fetchEastmoneyQuote(symbol: string): Promise<QuoteLookupResult> {
   };
 }
 
-async function fetchCryptoQuote(symbol: string, currency: AssetCurrency): Promise<QuoteLookupResult> {
+async function fetchUsdtCnyRate(): Promise<{ rate: number; asOf?: string }> {
+  const response = await fetch(USDT_CNY_RATE_API_PATH);
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `USDT/CNY 汇率请求失败：HTTP ${response.status}`));
+  }
+
+  const data = (await response.json()) as { rate?: unknown; asOf?: string };
+  const rate = Number(data?.rate);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new Error('未查到有效 USDT/CNY 汇率');
+  }
+
+  return {
+    rate,
+    asOf: data.asOf
+  };
+}
+
+async function fetchCryptoQuote(symbol: string): Promise<QuoteLookupResult> {
   const searchParams = new URLSearchParams({
     symbol,
-    convert: currency
+    convert: 'USDT'
   });
   const response = await fetch(`${CRYPTO_QUOTE_API_PATH}?${searchParams.toString()}`);
   if (!response.ok) {
@@ -62,13 +82,16 @@ async function fetchCryptoQuote(symbol: string, currency: AssetCurrency): Promis
   const data = (await response.json()) as QuoteApiResult;
   const price = Number(data?.price);
   if (!Number.isFinite(price) || price <= 0) {
-    throw new Error('未查到有效价格，请确认代码和币种');
+    throw new Error('未查到有效 USDT 价格，请确认代码');
   }
+
+  const usdtCny = await fetchUsdtCnyRate();
 
   return {
     price,
     source: 'coinmarketcap',
-    asOf: data.asOf
+    asOf: data.asOf ?? usdtCny.asOf,
+    exchangeRate: usdtCny.rate
   };
 }
 
@@ -79,7 +102,7 @@ export async function lookupInvestmentQuote(params: QuoteLookupParams): Promise<
   }
 
   if (params.investmentType === 'crypto') {
-    return fetchCryptoQuote(symbol, params.currency);
+    return fetchCryptoQuote(symbol);
   }
 
   return fetchEastmoneyQuote(symbol);

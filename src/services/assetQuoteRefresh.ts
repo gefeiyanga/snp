@@ -1,4 +1,4 @@
-import type { AssetCurrency, AssetRecord, InvestmentAssetType } from '@/types/ledger';
+import type { AssetRecord, InvestmentAssetType } from '@/types/ledger';
 import { lookupInvestmentQuote } from './marketData';
 
 type QuoteLookup = typeof lookupInvestmentQuote;
@@ -10,6 +10,11 @@ export type AssetQuoteRefreshResult = {
 };
 
 const toMoney = (value: number): number => Math.round(value * 100) / 100;
+
+const normalizeInvestmentType = (investmentType: InvestmentAssetType): InvestmentAssetType =>
+  investmentType === 'fund' || investmentType === 'stock' ? 'security' : investmentType;
+
+const shouldTrackQuoteUpdatedAt = (_investmentType: InvestmentAssetType): boolean => true;
 
 const canRefreshQuote = (
   asset: AssetRecord
@@ -40,14 +45,25 @@ export async function refreshInvestmentAssetQuotes(
     try {
       const quote = await lookupQuote({
         symbol: asset.symbol,
-        investmentType: asset.investmentType,
-        currency: (asset.currency ?? 'CNY') as AssetCurrency
+        investmentType: normalizeInvestmentType(asset.investmentType),
+        currency: 'CNY'
       });
       const unitPrice = quote.price;
+      const investmentType = normalizeInvestmentType(asset.investmentType);
+      const exchangeRate = investmentType === 'crypto' ? quote.exchangeRate : undefined;
+      const amount =
+        investmentType === 'crypto' && exchangeRate !== undefined
+          ? asset.quantity * unitPrice * exchangeRate
+          : asset.quantity * unitPrice;
       nextAssets[index] = {
         ...asset,
         unitPrice,
-        amount: toMoney(asset.quantity * unitPrice)
+        exchangeRate,
+        currency: investmentType === 'crypto' ? 'USDT' : 'CNY',
+        quoteUpdatedAt: shouldTrackQuoteUpdatedAt(asset.investmentType)
+          ? quote.asOf ?? new Date().toISOString()
+          : asset.quoteUpdatedAt,
+        amount: toMoney(amount)
       };
       refreshed += 1;
     } catch {

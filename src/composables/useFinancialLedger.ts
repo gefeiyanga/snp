@@ -1,6 +1,5 @@
 import { useAppStorage } from '@/composables/useStorage';
 import type {
-  AssetCurrency,
   AssetRecord,
   AssetValuationMode,
   InvestmentAssetType,
@@ -39,6 +38,18 @@ function isInvestmentPayload(data: LedgerFormPayload): boolean {
   return data.category === '投资' || data.valuationMode === 'market_quantity';
 }
 
+function normalizeInvestmentType(type?: InvestmentAssetType): InvestmentAssetType | undefined {
+  if (type === 'fund' || type === 'stock') return 'security';
+  return type;
+}
+
+function normalizeAssetRecord(row: AssetRecord): AssetRecord {
+  return {
+    ...row,
+    investmentType: normalizeInvestmentType(row.investmentType)
+  };
+}
+
 function normalizeAssetFromForm(data: LedgerFormPayload): Omit<AssetRecord, 'id'> {
   const description = data.description ?? '';
   const purchaseDate = data.purchaseDate ?? data.date;
@@ -46,19 +57,27 @@ function normalizeAssetFromForm(data: LedgerFormPayload): Omit<AssetRecord, 'id'
   if (isInvestmentPayload(data)) {
     const quantity = Number(data.quantity ?? 0);
     const unitPrice = Number(data.unitPrice ?? 0);
+    const investmentType = normalizeInvestmentType(data.investmentType as InvestmentAssetType | undefined);
+    const exchangeRate = data.exchangeRate !== undefined ? Number(data.exchangeRate) : undefined;
+    const amount =
+      investmentType === 'crypto' && exchangeRate !== undefined
+        ? quantity * unitPrice * exchangeRate
+        : quantity * unitPrice;
     return {
       name: data.name,
-      amount: toMoney(quantity * unitPrice),
+      amount: toMoney(amount),
       category: '投资',
       description,
       purchaseDate,
       valuationMode: 'market_quantity' as AssetValuationMode,
-      investmentType: data.investmentType as InvestmentAssetType | undefined,
+      investmentType,
       quantity,
       unitPrice,
+      exchangeRate,
+      quoteUpdatedAt: data.quoteUpdatedAt,
       costPrice: data.costPrice !== undefined ? Number(data.costPrice) : undefined,
       symbol: data.symbol?.trim() || undefined,
-      currency: (data.currency as AssetCurrency | undefined) ?? 'CNY'
+      currency: investmentType === 'crypto' ? 'USDT' : 'CNY'
     };
   }
 
@@ -72,6 +91,8 @@ function normalizeAssetFromForm(data: LedgerFormPayload): Omit<AssetRecord, 'id'
     investmentType: undefined,
     quantity: undefined,
     unitPrice: undefined,
+    exchangeRate: undefined,
+    quoteUpdatedAt: undefined,
     costPrice: undefined,
     symbol: undefined,
     currency: undefined
@@ -84,7 +105,8 @@ function normalizeAssetFromForm(data: LedgerFormPayload): Omit<AssetRecord, 'id'
 export function useAssetRecords() {
   const { getItem, setItem } = useAppStorage();
 
-  const list = async (): Promise<AssetRecord[]> => (await getItem<AssetRecord[]>(STORAGE_ASSETS)) ?? [];
+  const list = async (): Promise<AssetRecord[]> =>
+    ((await getItem<AssetRecord[]>(STORAGE_ASSETS)) ?? []).map(normalizeAssetRecord);
 
   const saveAll = async (rows: AssetRecord[]) => {
     await setItem(STORAGE_ASSETS, rows);
@@ -104,9 +126,11 @@ export function useAssetRecords() {
       description: input.description ?? '',
       purchaseDate: input.purchaseDate,
       valuationMode: input.valuationMode,
-      investmentType: input.investmentType,
+      investmentType: normalizeInvestmentType(input.investmentType),
       quantity: input.quantity,
       unitPrice: input.unitPrice,
+      exchangeRate: input.exchangeRate,
+      quoteUpdatedAt: input.quoteUpdatedAt,
       costPrice: input.costPrice,
       symbol: input.symbol,
       currency: input.currency
@@ -123,7 +147,7 @@ export function useAssetRecords() {
     if (i === -1) return null;
     rows[i] = { ...rows[i], ...patch };
     await saveAll(rows);
-    return rows[i];
+    return normalizeAssetRecord(rows[i]);
   };
 
   const remove = async (id: string): Promise<boolean> => {
@@ -138,6 +162,9 @@ export function useAssetRecords() {
   const upsertFromForm = async (data: LedgerFormPayload): Promise<AssetRecord> => {
     const base = normalizeAssetFromForm(data);
     if (data.id) {
+      if (isInvestmentPayload(data) && base.quoteUpdatedAt === undefined) {
+        delete base.quoteUpdatedAt;
+      }
       const updated = await update(data.id, base);
       if (updated) return updated;
     }

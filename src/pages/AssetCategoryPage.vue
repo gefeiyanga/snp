@@ -47,12 +47,35 @@ const goBack = () => {
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 0 }).format(value);
 
+const formatUnitPrice = (row: AssetRecord) => {
+  if (!row.unitPrice) return '';
+  if (row.investmentType === 'crypto') return `${row.unitPrice.toLocaleString('zh-CN')} USDT`;
+  return formatCurrency(row.unitPrice);
+};
+
+const formatQuoteUpdatedAt = (value?: string) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date);
+};
+
 const investmentSummary = (row: AssetRecord) => {
   if (row.category !== '投资' || !row.quantity) return row.description || '无备注';
-  const typeLabel =
-    row.investmentType === 'fund' ? '基金' : row.investmentType === 'stock' ? '股票' : '加密货币';
-  const priceText = row.unitPrice ? `单价 ${formatCurrency(row.unitPrice)}` : '';
-  return [row.symbol || row.name, `${row.quantity}`, row.currency, typeLabel, priceText].filter(Boolean).join(' · ');
+  const priceText = row.unitPrice ? `价格 ${formatUnitPrice(row)}` : '';
+  return [row.symbol || row.name, `${row.quantity}`, priceText].filter(Boolean).join(' · ');
+};
+
+const quoteUpdatedText = (row: AssetRecord) => {
+  if (row.category !== '投资' || !row.quoteUpdatedAt) return '';
+  return `更新时间 ${formatQuoteUpdatedAt(row.quoteUpdatedAt)}`;
 };
 
 const openCreate = () => {
@@ -78,9 +101,11 @@ const openEdit = (row: AssetRecord) => {
     investmentType: row.investmentType,
     quantity: row.quantity,
     unitPrice: row.unitPrice,
+    exchangeRate: row.exchangeRate,
     costPrice: row.costPrice,
     symbol: row.symbol,
-    currency: row.currency
+    currency: row.currency,
+    quoteUpdatedAt: row.quoteUpdatedAt
   };
   showSheet.value = true;
 };
@@ -125,6 +150,7 @@ const confirmDelete = async (row: AssetRecord) => {
             <div>
               <div class="cell-title">{{ row.name }}</div>
               <div class="cell-sub">{{ investmentSummary(row) }}</div>
+              <div v-if="quoteUpdatedText(row)" class="cell-meta">{{ quoteUpdatedText(row) }}</div>
             </div>
             <div class="cell-amt">{{ formatCurrency(row.amount) }}</div>
           </div>
@@ -250,6 +276,12 @@ const confirmDelete = async (row: AssetRecord) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cell-meta {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #6b7280;
 }
 
 .cell-amt {

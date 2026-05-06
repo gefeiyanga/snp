@@ -114,9 +114,7 @@ const formatCurrency = (value: number) => {
 
 const investmentSummary = (asset: AssetRecord) => {
   if (asset.category !== '投资' || !asset.quantity) return asset.name;
-  const typeLabel =
-    asset.investmentType === 'fund' ? '基金' : asset.investmentType === 'stock' ? '股票' : '加密货币';
-  return [asset.symbol || asset.name, `${asset.quantity}`, asset.currency, typeLabel].filter(Boolean).join(' · ');
+  return [asset.symbol || asset.name, `${asset.quantity}`].filter(Boolean).join(' · ');
 };
 
 const categorySubtitle = (category: any) => {

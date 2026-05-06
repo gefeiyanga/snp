@@ -64,7 +64,7 @@
                 />
               </template>
             </div>
-            <p v-if="isInvestmentAsset" class="amount-helper">按持仓数量和当前单价计算总价值</p>
+            <p v-if="isInvestmentAsset" class="amount-helper">按持仓数量和当前价格计算总价值</p>
           </div>
 
           <div class="form-item">
@@ -74,36 +74,6 @@
                 v-model="formData.name"
                 :border="false"
                 :placeholder="namePlaceholder"
-                class="form-field"
-              />
-            </div>
-          </div>
-
-          <div class="form-item">
-            <div class="field-label">{{ dateLabel }}</div>
-            <div class="field-wrapper">
-              <van-field
-                :model-value="formData.date"
-                :border="false"
-                readonly
-                clickable
-                right-icon="notes-o"
-                class="form-field"
-                @click="showDatePicker = true"
-              />
-            </div>
-          </div>
-
-          <div class="form-item">
-            <div class="field-label">备注说明</div>
-            <div class="field-wrapper textarea-wrapper">
-              <van-field
-                v-model="formData.description"
-                type="textarea"
-                rows="3"
-                autosize
-                :border="false"
-                :placeholder="remarkPlaceholder"
                 class="form-field"
               />
             </div>
@@ -141,6 +111,7 @@
                   size="small"
                   round
                   plain
+                  class="quote-button"
                   :disabled="!canLookupQuote || isLookingUpQuote"
                   @click="refreshInvestmentQuote"
                 >
@@ -150,7 +121,7 @@
               </div>
             </div>
             <div class="form-item">
-              <div class="field-label">当前单价</div>
+              <div class="field-label">{{ unitPriceLabel }}</div>
               <div class="field-wrapper">
                 <van-field
                   v-model="formData.unitPrice"
@@ -173,22 +144,6 @@
                   placeholder="选填"
                   class="form-field"
                 />
-              </div>
-            </div>
-            <div class="form-item">
-              <div class="field-label">币种</div>
-              <div class="type-tags">
-                <van-tag
-                  v-for="opt in currencyOptions"
-                  :key="opt"
-                  round
-                  size="medium"
-                  :plain="formData.currency !== opt"
-                  :style="formData.currency === opt ? activeTagStyle : inactiveTagStyle"
-                  @click="formData.currency = opt"
-                >
-                  {{ opt }}
-                </van-tag>
               </div>
             </div>
             <div class="form-item">
@@ -276,6 +231,35 @@
             </div>
           </template>
 
+          <div class="form-item">
+            <div class="field-label">{{ dateLabel }}</div>
+            <div class="field-wrapper">
+              <van-field
+                :model-value="formData.date"
+                :border="false"
+                readonly
+                clickable
+                right-icon="notes-o"
+                class="form-field"
+                @click="showDatePicker = true"
+              />
+            </div>
+          </div>
+
+          <div class="form-item">
+            <div class="field-label">备注说明</div>
+            <div class="field-wrapper textarea-wrapper">
+              <van-field
+                v-model="formData.description"
+                type="textarea"
+                rows="3"
+                autosize
+                :border="false"
+                :placeholder="remarkPlaceholder"
+                class="form-field"
+              />
+            </div>
+          </div>
         </div>
 
         <div class="sheet-footer">
@@ -321,6 +305,8 @@ interface FormData {
   valuationMode: 'manual_amount' | 'market_quantity';
   investmentType: InvestmentAssetType;
   unitPrice: string;
+  exchangeRate: string;
+  quoteUpdatedAt: string;
   costPrice: string;
   symbol: string;
   currency: AssetCurrency;
@@ -348,6 +334,8 @@ interface Props {
     investmentType: InvestmentAssetType;
     quantity: number | string;
     unitPrice: number | string;
+    exchangeRate: number | string;
+    quoteUpdatedAt: string;
     costPrice: number | string;
     symbol: string;
     currency: AssetCurrency;
@@ -390,8 +378,10 @@ const formData = ref<FormData>({
   description: '',
   date: defaultDate,
   valuationMode: 'manual_amount',
-  investmentType: 'fund',
+  investmentType: 'security',
   unitPrice: '',
+  exchangeRate: '',
+  quoteUpdatedAt: '',
   costPrice: '',
   symbol: '',
   currency: 'CNY',
@@ -435,12 +425,9 @@ const typeOptions = computed(() =>
 );
 const activeType = ref(typeOptions.value[0]);
 const investmentTypeOptions = [
-  { value: 'fund' as const, label: '基金' },
-  { value: 'stock' as const, label: '股票' },
+  { value: 'security' as const, label: '股票/基金' },
   { value: 'crypto' as const, label: '加密货币' }
 ];
-const currencyOptions: AssetCurrency[] = ['CNY', 'USD', 'USDT'];
-
 const isAmortizingSheet = computed(
   () => props.type === 'liability' && (activeType.value === '房贷' || activeType.value === '车贷')
 );
@@ -461,6 +448,9 @@ const dateLabel = computed(() => {
   if (isAmortizingSheet.value) return '第一期还款日';
   return '发生日期';
 });
+const unitPriceLabel = computed(() =>
+  formData.value.investmentType === 'crypto' ? '当前价格（USDT）' : '当前价格（人民币）'
+);
 
 const previewMonthly = computed(() => {
   if (!isAmortizingSheet.value) return '—';
@@ -490,8 +480,11 @@ const remarkPlaceholder = computed(() => (props.type === 'asset' ? '添加备注
 const investmentValuePreview = computed(() => {
   const quantity = Number(formData.value.quantity || 0);
   const unitPrice = Number(formData.value.unitPrice || 0);
+  const exchangeRate = Number(formData.value.exchangeRate || 0);
   if (!quantity || !unitPrice) return '—';
-  return (Math.round(quantity * unitPrice * 100) / 100).toFixed(2);
+  if (formData.value.investmentType === 'crypto' && !exchangeRate) return '—';
+  const cnyAmount = formData.value.investmentType === 'crypto' ? quantity * unitPrice * exchangeRate : quantity * unitPrice;
+  return (Math.round(cnyAmount * 100) / 100).toFixed(2);
 });
 
 const activeTagStyle = computed(
@@ -506,6 +499,7 @@ const confirmButtonStyle = computed(() => ({
 }));
 const isLookingUpQuote = ref(false);
 const quoteStatusText = ref('可按类型查询价格');
+const initialUnitPrice = ref('');
 const dragOffsetY = ref(0);
 const isDragging = ref(false);
 const dragStartY = ref(0);
@@ -524,6 +518,29 @@ const canLookupQuote = computed(
     !!formData.value.symbol.trim() &&
     (!requiresApiKey.value || hasMarketDataApiKey())
 );
+
+const normalizeInvestmentType = (value?: InvestmentAssetType): InvestmentAssetType => {
+  if (value === 'fund' || value === 'stock') return 'security';
+  return value ?? 'security';
+};
+
+const shouldTrackQuoteUpdatedAt = () =>
+  formData.value.investmentType === 'security' || formData.value.investmentType === 'crypto';
+
+const formatLocalQuoteTime = (value?: string) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date);
+};
 
 watch(activeType, (value) => {
   formData.value.category = value;
@@ -544,11 +561,13 @@ watch(
       description: newData?.description || '',
       date: newData?.date || defaultDate,
       valuationMode: newData?.valuationMode === 'market_quantity' ? 'market_quantity' : 'manual_amount',
-      investmentType: newData?.investmentType ?? 'fund',
+      investmentType: normalizeInvestmentType(newData?.investmentType),
       unitPrice: newData?.unitPrice !== undefined && newData?.unitPrice !== '' ? String(newData.unitPrice) : '',
+      exchangeRate: newData?.exchangeRate !== undefined && newData?.exchangeRate !== '' ? String(newData.exchangeRate) : '',
+      quoteUpdatedAt: newData?.quoteUpdatedAt || '',
       costPrice: newData?.costPrice !== undefined && newData?.costPrice !== '' ? String(newData.costPrice) : '',
       symbol: newData?.symbol || '',
-      currency: newData?.currency ?? 'CNY',
+      currency: normalizeInvestmentType(newData?.investmentType) === 'crypto' ? 'USDT' : 'CNY',
       monthlyPayment: String(newData?.monthlyPayment ?? ''),
       interestRate: String(newData?.interestRate ?? ''),
       termMonths:
@@ -558,6 +577,7 @@ watch(
       repaymentMethod: newData?.repaymentMethod === 'equal_principal' ? 'equal_principal' : 'equal_payment'
     };
     formData.value = merged;
+    initialUnitPrice.value = merged.unitPrice;
 
     const rawCat = merged.category || String(typeOptions.value[0]);
     const normalized =
@@ -590,11 +610,15 @@ watch(
   () => formData.value.investmentType,
   (value) => {
     if (!isInvestmentAsset.value) return;
+    formData.value.currency = value === 'crypto' ? 'USDT' : 'CNY';
+    if (value !== 'crypto') {
+      formData.value.exchangeRate = '';
+    }
     quoteStatusText.value =
       requiresApiKeyForInvestmentType(value) && !hasMarketDataApiKey()
         ? '股票/基金需配置 API Key；加密货币走 CoinMarketCap 代理'
         : value === 'crypto'
-          ? '加密货币走 CoinMarketCap 代理'
+          ? '加密货币按 USDT 报价并折算人民币'
           : '可按类型查询价格';
   },
   { immediate: true }
@@ -645,10 +669,18 @@ const refreshInvestmentQuote = async () => {
     const quote = await lookupInvestmentQuote({
       symbol: formData.value.symbol,
       investmentType: formData.value.investmentType,
-      currency: formData.value.currency
+      currency: 'CNY'
     });
     formData.value.unitPrice = quote.price.toFixed(4).replace(/\.?0+$/, '');
-    quoteStatusText.value = quote.asOf ? `已更新：${quote.asOf}` : '价格已更新';
+    formData.value.exchangeRate =
+      quote.exchangeRate !== undefined ? quote.exchangeRate.toFixed(6).replace(/\.?0+$/, '') : '';
+    if (shouldTrackQuoteUpdatedAt()) {
+      formData.value.quoteUpdatedAt = quote.asOf ?? new Date().toISOString();
+    }
+    const rateText = quote.exchangeRate ? ` · USDT/CNY ${quote.exchangeRate.toFixed(4)}` : '';
+    quoteStatusText.value = formData.value.quoteUpdatedAt
+      ? `已更新：${formatLocalQuoteTime(formData.value.quoteUpdatedAt)}${rateText}`
+      : `价格已更新${rateText}`;
   } catch (error) {
     quoteStatusText.value = error instanceof Error ? error.message : '价格查询失败';
     showToast(quoteStatusText.value);
@@ -674,7 +706,11 @@ const submitAsset = () => {
       return;
     }
     if (!Number(formData.value.unitPrice || 0)) {
-      showToast('请输入当前单价');
+      showToast('请输入当前价格');
+      return;
+    }
+    if (formData.value.investmentType === 'crypto' && !Number(formData.value.exchangeRate || 0)) {
+      showToast('请先查询 USDT/CNY 汇率');
       return;
     }
   } else if (!Number(formData.value.amount || 0)) {
@@ -730,11 +766,18 @@ const submitAsset = () => {
     payload.valuationMode = 'market_quantity';
     payload.quantity = Number(formData.value.quantity || 0);
     payload.unitPrice = Number(formData.value.unitPrice || 0);
+    payload.exchangeRate =
+      formData.value.investmentType === 'crypto' ? Number(formData.value.exchangeRate || 0) : undefined;
     payload.costPrice = formData.value.costPrice.trim() ? Number(formData.value.costPrice) : undefined;
     payload.investmentType = formData.value.investmentType;
     payload.symbol = formData.value.symbol.trim() || undefined;
-    payload.currency = formData.value.currency;
+    payload.currency = formData.value.investmentType === 'crypto' ? 'USDT' : 'CNY';
     payload.amount = Number(investmentValuePreview.value || 0);
+    if (shouldTrackQuoteUpdatedAt()) {
+      payload.quoteUpdatedAt =
+        formData.value.quoteUpdatedAt ||
+        (formData.value.unitPrice !== initialUnitPrice.value ? new Date().toISOString() : undefined);
+    }
   } else if (props.type === 'asset') {
     payload.valuationMode = 'manual_amount';
   }
@@ -862,8 +905,21 @@ const submitAsset = () => {
   margin-top: 8px;
 }
 
+.quote-button {
+  flex: 0 0 auto;
+  min-width: 78px;
+  white-space: nowrap;
+
+  :deep(.van-button__text) {
+    white-space: nowrap;
+  }
+}
+
 .quote-status {
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: 12px;
+  line-height: 1.45;
   color: #9ca3af;
 }
 
