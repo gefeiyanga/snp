@@ -6,3 +6,4 @@
 .vercel
 /dist
 *.log
+.env*.local
