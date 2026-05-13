@@ -7,6 +7,7 @@ import {
   parseInterestRatePercent,
   remainingAfterEqualPayment,
   remainingAfterEqualPrincipal,
+  scheduledLoanInstallment,
   scheduledMonthlyPayment
 } from './loanSchedule';
 
@@ -76,6 +77,28 @@ describe('scheduledMonthlyPayment', () => {
     const a = scheduledMonthlyPayment(P, rate, n, 'equal_payment', first, '2024-01-01');
     const b = scheduledMonthlyPayment(P, rate, n, 'equal_payment', first, '2024-06-15');
     expect(a).toBeCloseTo(b, 5);
+  });
+});
+
+describe('scheduledLoanInstallment', () => {
+  it('拆分等额本金首期本金与利息', () => {
+    const installment = scheduledLoanInstallment(120000, 6, 24, 'equal_principal', '2024-01-15', 1);
+    expect(installment).toMatchObject({
+      period: 1,
+      dueDate: '2024-01-15',
+      principalPayment: 5000,
+      interestPayment: 600,
+      totalPayment: 5600,
+      remainingAfterPayment: 115000
+    });
+  });
+
+  it('等额本息拆分后总额接近展示月供', () => {
+    const installment = scheduledLoanInstallment(100000, 12, 12, 'equal_payment', '2024-01-01', 3);
+    const monthly = scheduledMonthlyPayment(100000, 12, 12, 'equal_payment', '2024-01-01', '2024-01-01');
+    expect(installment.totalPayment).toBeCloseTo(Math.round(monthly * 100) / 100, 2);
+    expect(installment.interestPayment).toBeGreaterThan(0);
+    expect(installment.principalPayment).toBeGreaterThan(0);
   });
 });
 

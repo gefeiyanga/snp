@@ -2,276 +2,221 @@
   <van-popup
     v-model:show="showPopup"
     position="bottom"
-    :style="{ height: '70vh' }"
+    :style="{ maxHeight: '85vh' }"
+    :overlay-style="{ background: 'rgba(0, 0, 0, 0.45)' }"
     class="modern-sheet-popup"
     round
     :close-on-click-overlay="true"
   >
-    <div class="sheet-page">
-      <div
-        class="content-panel"
-        ref="contentPanelRef"
-        :style="{
-          transform: `translateY(${dragOffsetY}px)`,
-          transition: isDragging ? 'none' : 'transform 0.22s ease'
-        }"
-      >
-        <div
-          class="drag-handle-zone"
-          @touchstart="onDragStart"
-          @touchmove="onDragMove"
-          @touchend="onDragEnd"
-          @touchcancel="onDragEnd"
-        >
-          <div class="drag-bar"></div>
-        </div>
+    <div class="quick-sheet ledger-sheet" :style="panelThemeStyle">
+      <div class="sheet-head">
+        <h3 class="sheet-title">{{ title }}</h3>
+        <button type="button" class="sheet-close" aria-label="关闭" @click="closeSheet">
+          <van-icon name="cross" size="18" />
+        </button>
+      </div>
 
-        <div class="sheet-scroll">
-          <div v-if="!lockCategory" class="type-tags">
-            <van-tag
-              v-for="item in typeOptions"
-              :key="item"
-              round
-              size="medium"
-              :plain="activeType !== item"
-              :style="activeType === item ? activeTagStyle : inactiveTagStyle"
-              @click="activeType = item"
-            >
-              {{ item }}
-            </van-tag>
-          </div>
-
-          <div class="amount-section">
-            <div class="amount-label">{{ amountLabel }}</div>
-            <div class="amount-value">
-              <template v-if="isInvestmentAsset">
-                <input
-                  v-model="formData.quantity"
-                  type="number"
-                  placeholder="0.00"
-                  class="amount-input"
-                  :class="{ empty: !hasPrimaryAmount }"
-                />
-              </template>
-              <template v-else>
-                <span class="amount-prefix">¥ </span>
-                <input
-                  v-model="formData.amount"
-                  type="number"
-                  placeholder="0.00"
-                  class="amount-input"
-                  :class="{ empty: !hasPrimaryAmount }"
-                />
-              </template>
-            </div>
-            <p v-if="isInvestmentAsset" class="amount-helper">按持仓数量和当前价格计算总价值</p>
-          </div>
-
-          <div class="form-item">
-            <div class="field-label">{{ nameLabel }}</div>
-            <div class="field-wrapper">
-              <van-field
-                v-model="formData.name"
-                :border="false"
-                :placeholder="namePlaceholder"
-                class="form-field"
-              />
-            </div>
-          </div>
-
-          <template v-if="isInvestmentAsset">
-            <div class="form-item">
-              <div class="field-label">投资类型</div>
-              <div class="type-tags">
-                <van-tag
-                  v-for="opt in investmentTypeOptions"
-                  :key="opt.value"
-                  round
-                  size="medium"
-                  :plain="formData.investmentType !== opt.value"
-                  :style="formData.investmentType === opt.value ? activeTagStyle : inactiveTagStyle"
-                  @click="formData.investmentType = opt.value"
-                >
-                  {{ opt.label }}
-                </van-tag>
-              </div>
-            </div>
-            <div class="form-item">
-              <div class="field-label">标的代码</div>
-              <div class="field-wrapper">
-                <van-field
-                  v-model="formData.symbol"
-                  :border="false"
-                  placeholder="例如 510300 / AAPL / BTC"
-                  class="form-field"
-                />
-              </div>
-              <div class="quote-actions">
-                <van-button
-                  size="small"
-                  round
-                  plain
-                  class="quote-button"
-                  :disabled="!canLookupQuote || isLookingUpQuote"
-                  @click="refreshInvestmentQuote"
-                >
-                  {{ isLookingUpQuote ? '查询中...' : '查询价格' }}
-                </van-button>
-                <span class="quote-status">{{ quoteStatusText }}</span>
-              </div>
-            </div>
-            <div class="form-item">
-              <div class="field-label">{{ unitPriceLabel }}</div>
-              <div class="field-wrapper">
-                <van-field
-                  v-model="formData.unitPrice"
-                  type="text"
-                  inputmode="decimal"
-                  :border="false"
-                  placeholder="用于计算当前总价值"
-                  class="form-field"
-                />
-              </div>
-            </div>
-            <div class="form-item">
-              <div class="field-label">成本价</div>
-              <div class="field-wrapper">
-                <van-field
-                  v-model="formData.costPrice"
-                  type="text"
-                  inputmode="decimal"
-                  :border="false"
-                  placeholder="选填"
-                  class="form-field"
-                />
-              </div>
-            </div>
-            <div class="form-item">
-              <div class="field-label">当前总价值（试算）</div>
-              <div class="field-wrapper">
-                <van-field :model-value="investmentValuePreview" readonly :border="false" class="form-field" />
-              </div>
-            </div>
-          </template>
-
-          <template v-if="type === 'liability' && isAmortizingSheet">
-            <div class="form-item">
-              <div class="field-label">还款方式</div>
-              <div class="type-tags">
-                <van-tag
-                  v-for="opt in repaymentMethodOptions"
-                  :key="opt.value"
-                  round
-                  size="medium"
-                  :plain="formData.repaymentMethod !== opt.value"
-                  :style="formData.repaymentMethod === opt.value ? activeTagStyle : inactiveTagStyle"
-                  @click="formData.repaymentMethod = opt.value"
-                >
-                  {{ opt.label }}
-                </van-tag>
-              </div>
-            </div>
-            <div class="form-item">
-              <div class="field-label">总期数（月）</div>
-              <div class="field-wrapper">
-                <van-field
-                  v-model="formData.termMonths"
-                  type="digit"
-                  :border="false"
-                  placeholder="例如 360"
-                  class="form-field"
-                />
-              </div>
-            </div>
-            <div class="form-item">
-              <div class="field-label">年利率（%）</div>
-              <div class="field-wrapper">
-                <van-field
-                  v-model="formData.interestRate"
-                  type="text"
-                  inputmode="decimal"
-                  :border="false"
-                  placeholder="必填"
-                  class="form-field"
-                />
-              </div>
-            </div>
-            <div class="form-item">
-              <div class="field-label">月供（试算，只读）</div>
-              <div class="field-wrapper">
-                <van-field :model-value="previewMonthly" readonly :border="false" class="form-field" />
-              </div>
-            </div>
-          </template>
-          <template v-else-if="type === 'liability'">
-            <div class="form-item">
-              <div class="field-label">月供（元）</div>
-              <div class="field-wrapper">
-                <van-field
-                  v-model="formData.monthlyPayment"
-                  type="digit"
-                  :border="false"
-                  placeholder="选填"
-                  class="form-field"
-                />
-              </div>
-            </div>
-            <div class="form-item">
-              <div class="field-label">年利率（%）</div>
-              <div class="field-wrapper">
-                <van-field
-                  v-model="formData.interestRate"
-                  type="text"
-                  inputmode="decimal"
-                  :border="false"
-                  placeholder="选填"
-                  class="form-field"
-                />
-              </div>
-            </div>
-          </template>
-
-          <div class="form-item">
-            <div class="field-label">{{ dateLabel }}</div>
-            <div class="field-wrapper">
-              <van-field
-                :model-value="formData.date"
-                :border="false"
-                readonly
-                clickable
-                right-icon="notes-o"
-                class="form-field"
-                @click="showDatePicker = true"
-              />
-            </div>
-          </div>
-
-          <div class="form-item">
-            <div class="field-label">备注说明</div>
-            <div class="field-wrapper textarea-wrapper">
-              <van-field
-                v-model="formData.description"
-                type="textarea"
-                rows="3"
-                autosize
-                :border="false"
-                :placeholder="remarkPlaceholder"
-                class="form-field"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div class="sheet-footer">
-          <van-button
-            round
-            class="confirm-button"
-            :style="confirmButtonStyle"
-            @click="submitAsset"
+      <div class="sheet-scroll">
+        <div v-if="!lockCategory" class="mode-tabs">
+          <button
+            v-for="item in typeOptions"
+            :key="item"
+            type="button"
+            class="mode-tab"
+            :class="{ active: activeType === item }"
+            @click="activeType = item"
           >
-            {{ submitText }}
-          </van-button>
+            {{ item }}
+          </button>
         </div>
+
+        <van-field
+          v-model="formData.name"
+          :label="nameLabel"
+          :placeholder="namePlaceholder"
+          input-align="right"
+          clearable
+          class="sheet-field"
+        />
+
+        <van-field
+          v-if="isInvestmentAsset"
+          v-model="formData.quantity"
+          type="number"
+          :label="amountLabel"
+          placeholder="请输入持有数量"
+          input-align="right"
+          clearable
+          class="sheet-field amount-field"
+        />
+        <van-field
+          v-else
+          v-model="formData.amount"
+          type="number"
+          :label="amountLabel"
+          :placeholder="amountPlaceholder"
+          input-align="right"
+          clearable
+          class="sheet-field amount-field"
+        />
+        <p v-if="isInvestmentAsset" class="sheet-hint">可根据持有数量和当前价格自动计算总资产价值</p>
+
+        <template v-if="isInvestmentAsset">
+          <div class="sheet-block">
+            <span class="sheet-label">投资类型</span>
+            <div class="chip-row">
+              <button
+                v-for="opt in investmentTypeOptions"
+                :key="opt.value"
+                type="button"
+                class="chip-btn"
+                :class="{ active: formData.investmentType === opt.value }"
+                @click="formData.investmentType = opt.value"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+          </div>
+          <van-field
+            v-model="formData.symbol"
+            label="标的代码"
+            placeholder="例如 510300 / AAPL / BTC"
+            input-align="right"
+            clearable
+            class="sheet-field"
+          />
+          <div class="quote-actions">
+            <button
+              type="button"
+              class="quote-button"
+              :disabled="!canLookupQuote || isLookingUpQuote"
+              @click="refreshInvestmentQuote"
+            >
+              {{ isLookingUpQuote ? '查询中...' : '查询价格' }}
+            </button>
+            <span class="quote-status">{{ quoteStatusText }}</span>
+          </div>
+          <van-field
+            v-model="formData.unitPrice"
+            type="text"
+            inputmode="decimal"
+            :label="unitPriceLabel"
+            placeholder="用于计算当前总价值"
+            input-align="right"
+            clearable
+            class="sheet-field"
+          />
+          <van-field
+            v-model="formData.costPrice"
+            type="text"
+            inputmode="decimal"
+            label="成本价"
+            placeholder="选填"
+            input-align="right"
+            clearable
+            class="sheet-field"
+          />
+          <van-field
+            :model-value="investmentValuePreview"
+            label="当前总价值（试算）"
+            readonly
+            input-align="right"
+            class="sheet-field"
+          />
+        </template>
+
+        <template v-if="type === 'liability' && isAmortizingSheet">
+          <div class="sheet-block">
+            <span class="sheet-label">还款方式</span>
+            <div class="chip-row">
+              <button
+                v-for="opt in repaymentMethodOptions"
+                :key="opt.value"
+                type="button"
+                class="chip-btn"
+                :class="{ active: formData.repaymentMethod === opt.value }"
+                @click="formData.repaymentMethod = opt.value"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+          </div>
+          <van-field
+            v-model="formData.termMonths"
+            type="digit"
+            label="总期数（月）"
+            placeholder="例如 360"
+            input-align="right"
+            clearable
+            class="sheet-field"
+          />
+          <van-field
+            v-model="formData.interestRate"
+            type="text"
+            inputmode="decimal"
+            label="年利率（%）"
+            placeholder="必填"
+            input-align="right"
+            clearable
+            class="sheet-field"
+          />
+          <van-field
+            :model-value="previewMonthly"
+            label="月供（试算）"
+            readonly
+            input-align="right"
+            class="sheet-field"
+          />
+        </template>
+        <template v-else-if="type === 'liability'">
+          <van-field
+            v-model="formData.monthlyPayment"
+            type="digit"
+            label="月供（元）"
+            placeholder="选填"
+            input-align="right"
+            clearable
+            class="sheet-field"
+          />
+          <van-field
+            v-model="formData.interestRate"
+            type="text"
+            inputmode="decimal"
+            label="年利率（%）"
+            placeholder="选填"
+            input-align="right"
+            clearable
+            class="sheet-field"
+          />
+        </template>
+
+        <van-field
+          :model-value="formData.date"
+          :label="dateLabel"
+          readonly
+          clickable
+          right-icon="notes-o"
+          input-align="right"
+          class="sheet-field"
+          @click="showDatePicker = true"
+        />
+
+        <van-field
+          v-model="formData.description"
+          label="备注"
+          type="textarea"
+          rows="2"
+          autosize
+          maxlength="80"
+          :placeholder="remarkPlaceholder"
+          input-align="right"
+          clearable
+          class="sheet-field"
+        />
+      </div>
+
+      <div class="sheet-actions">
+        <button type="button" class="save-btn" :disabled="!computedCanSubmit" @click="submitAsset">{{ submitText }}</button>
       </div>
     </div>
 
@@ -292,6 +237,7 @@ import { showToast } from 'vant';
 import { assetCanonicalLabel } from '@/domain/ledgerCategories';
 import { parseInterestRatePercent, scheduledMonthlyPayment, todayYmd } from '@/domain/loanSchedule';
 import { hasMarketDataApiKey, lookupInvestmentQuote, requiresApiKeyForInvestmentType } from '@/services/marketData';
+import { formatPriceDecimal } from '@/utils/amountDisplay';
 import type { AssetCurrency, InvestmentAssetType } from '@/types/ledger';
 
 interface FormData {
@@ -407,17 +353,15 @@ const themePalette = computed(() =>
   props.type === 'asset'
     ? {
         accent: '#10b981',
-        tagBg: '#ecfdf5',
-        tagText: '#047857',
-        tagBorder: '#a7f3d0',
-        buttonShadow: 'rgba(16, 185, 129, 0.26)'
+        accentDeep: '#047857',
+        accentSoft: '#ecfdf5',
+        tagBorder: '#a7f3d0'
       }
     : {
-        accent: '#f87171',
-        tagBg: '#fff1f2',
-        tagText: '#be123c',
-        tagBorder: '#fecdd3',
-        buttonShadow: 'rgba(248, 113, 113, 0.28)'
+        accent: '#f43f5e',
+        accentDeep: '#be123c',
+        accentSoft: '#fff1f2',
+        tagBorder: '#fecdd3'
       }
 );
 const typeOptions = computed(() =>
@@ -433,15 +377,16 @@ const isAmortizingSheet = computed(
 );
 const isInvestmentAsset = computed(() => props.type === 'asset' && activeType.value === '投资');
 
-const hasPrimaryAmount = computed(() =>
-  isInvestmentAsset.value ? Number(formData.value.quantity || 0) > 0 : Number(formData.value.amount || 0) > 0
-);
 const submitText = computed(() => props.submitText);
 const amountLabel = computed(() => {
-  if (props.type === 'asset') return isInvestmentAsset.value ? '持有数量' : '金额';
+  if (props.type === 'asset') return isInvestmentAsset.value ? '持有数量' : '当前金额';
   if (isAmortizingSheet.value) return '合同本金（元）';
   if (props.mode === 'edit') return '当前剩余本金';
   return '负债金额';
+});
+const amountPlaceholder = computed(() => {
+  if (props.type === 'asset') return '请输入当前资产金额';
+  return isAmortizingSheet.value ? '请输入合同本金' : '请输入负债金额';
 });
 const dateLabel = computed(() => {
   if (props.type === 'asset') return '记录日期';
@@ -453,21 +398,21 @@ const unitPriceLabel = computed(() =>
 );
 
 const previewMonthly = computed(() => {
-  if (!isAmortizingSheet.value) return '—';
+  if (!isAmortizingSheet.value) return '暂无数据';
   const P = Number(formData.value.amount || 0);
   const n = Number(formData.value.termMonths || 0);
   const parsed = parseInterestRatePercent(formData.value.interestRate);
   const rateRaw = formData.value.interestRate.trim();
-  if (rateRaw !== '' && parsed === null) return '—';
+  if (rateRaw !== '' && parsed === null) return '暂无数据';
   const rate = parsed ?? 0;
-  if (!P || !n || n < 1) return '—';
+  if (!P || !n || n < 1) return '暂无数据';
   const first = formData.value.date;
   try {
     const v = scheduledMonthlyPayment(P, rate, n, formData.value.repaymentMethod, first, todayYmd());
-    if (!Number.isFinite(v)) return '—';
+    if (!Number.isFinite(v)) return '暂无数据';
     return v.toFixed(2);
   } catch {
-    return '—';
+    return '暂无数据';
   }
 });
 const nameLabel = computed(() => (props.type === 'asset' ? '资产名称' : '负债名称'));
@@ -481,34 +426,35 @@ const investmentValuePreview = computed(() => {
   const quantity = Number(formData.value.quantity || 0);
   const unitPrice = Number(formData.value.unitPrice || 0);
   const exchangeRate = Number(formData.value.exchangeRate || 0);
-  if (!quantity || !unitPrice) return '—';
-  if (formData.value.investmentType === 'crypto' && !exchangeRate) return '—';
+  if (!quantity || !unitPrice) return '暂无数据';
+  if (formData.value.investmentType === 'crypto' && !exchangeRate) return '暂无数据';
   const cnyAmount = formData.value.investmentType === 'crypto' ? quantity * unitPrice * exchangeRate : quantity * unitPrice;
   return (Math.round(cnyAmount * 100) / 100).toFixed(2);
 });
-
-const activeTagStyle = computed(
-  () =>
-    `background:${themePalette.value.tagBg};color:${themePalette.value.tagText};border:1px solid ${themePalette.value.tagBorder};padding:6px 14px;font-size:11px`
-);
-const inactiveTagStyle = 'background:white;color:#6b7280;border:1px solid #e2e5eb;padding:6px 14px;font-size:11px';
-const confirmButtonStyle = computed(() => ({
-  background: themePalette.value.accent,
-  color: '#ffffff',
-  boxShadow: `0 8px 18px ${themePalette.value.buttonShadow}`
+const computedCanSubmit = computed(() => {
+  if (!formData.value.name.trim()) return false;
+  if (props.type === 'asset' && isInvestmentAsset.value) {
+    if (!Number(formData.value.quantity || 0)) return false;
+    if (!Number(formData.value.unitPrice || 0)) return false;
+    if (formData.value.investmentType === 'crypto' && !Number(formData.value.exchangeRate || 0)) return false;
+    return true;
+  }
+  if (!Number(formData.value.amount || 0)) return false;
+  if (props.type === 'liability' && isAmortizingSheet.value) {
+    const n = Number(formData.value.termMonths || 0);
+    return Number.isInteger(n) && n > 0 && parseInterestRatePercent(formData.value.interestRate) !== null;
+  }
+  return true;
+});
+const panelThemeStyle = computed(() => ({
+  '--sheet-accent': themePalette.value.accent,
+  '--sheet-accent-deep': themePalette.value.accentDeep,
+  '--sheet-accent-soft': themePalette.value.accentSoft,
+  '--sheet-accent-border': themePalette.value.tagBorder
 }));
 const isLookingUpQuote = ref(false);
 const quoteStatusText = ref('可按类型查询价格');
 const initialUnitPrice = ref('');
-const dragOffsetY = ref(0);
-const isDragging = ref(false);
-const dragStartY = ref(0);
-const contentPanelRef = ref<HTMLElement | null>(null);
-
-const closeThresholdPx = computed(() => {
-  const panelHeight = contentPanelRef.value?.clientHeight || window.innerHeight * 0.7;
-  return Math.max(110, panelHeight * 0.2);
-});
 const requiresApiKey = computed(
   () => isInvestmentAsset.value && requiresApiKeyForInvestmentType(formData.value.investmentType)
 );
@@ -597,8 +543,6 @@ watch(
 
 watch(showPopup, (visible) => {
   if (visible) {
-    dragOffsetY.value = 0;
-    isDragging.value = false;
     quoteStatusText.value =
       requiresApiKey.value && !hasMarketDataApiKey()
         ? '股票/基金需配置 API Key；加密货币走 CoinMarketCap 代理'
@@ -628,34 +572,6 @@ const closeSheet = () => {
   emit('update:modelValue', false);
 };
 
-const onDragStart = (event: TouchEvent) => {
-  if (showDatePicker.value) return;
-  isDragging.value = true;
-  dragStartY.value = event.touches[0].clientY;
-  dragOffsetY.value = 0;
-};
-
-const onDragMove = (event: TouchEvent) => {
-  if (!isDragging.value) return;
-  const deltaY = event.touches[0].clientY - dragStartY.value;
-  if (deltaY <= 0) {
-    dragOffsetY.value = 0;
-    return;
-  }
-  dragOffsetY.value = deltaY;
-  event.preventDefault();
-};
-
-const onDragEnd = () => {
-  if (!isDragging.value) return;
-  isDragging.value = false;
-  if (dragOffsetY.value > closeThresholdPx.value) {
-    closeSheet();
-    return;
-  }
-  dragOffsetY.value = 0;
-};
-
 const refreshInvestmentQuote = async () => {
   if (!isInvestmentAsset.value) return;
   if (requiresApiKey.value && !hasMarketDataApiKey()) {
@@ -671,7 +587,7 @@ const refreshInvestmentQuote = async () => {
       investmentType: formData.value.investmentType,
       currency: 'CNY'
     });
-    formData.value.unitPrice = quote.price.toFixed(4).replace(/\.?0+$/, '');
+    formData.value.unitPrice = formatPriceDecimal(quote.price);
     formData.value.exchangeRate =
       quote.exchangeRate !== undefined ? quote.exchangeRate.toFixed(6).replace(/\.?0+$/, '') : '';
     if (shouldTrackQuoteUpdatedAt()) {
@@ -789,200 +705,227 @@ const submitAsset = () => {
 </script>
 
 <style lang="less" scoped>
-.sheet-page {
-  height: 100%;
-  background: transparent;
-  overflow: hidden;
-}
-
-.content-panel {
-  background: white;
-  border-radius: 24px 24px 0 0;
-  margin-top: 0;
-  height: 100%;
-  min-height: 0;
+.quick-sheet {
   box-sizing: border-box;
+  max-height: 85vh;
+  padding: 18px 20px calc(16px + env(safe-area-inset-bottom, 0));
+  background: #fff;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: relative;
-  box-shadow: 0 -8px 24px rgba(17, 24, 39, 0.08);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.sheet-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 16px;
+  background: #f3f4f6;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
 }
 
 .sheet-scroll {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 0 20px calc(92px + env(safe-area-inset-bottom, 0px));
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 12px;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
-.drag-handle-zone {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex: 0 0 44px;
-  padding-top: 6px;
-  padding-bottom: 6px;
-  box-sizing: border-box;
-  touch-action: none;
+.mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: #f3f4f6;
+  border-radius: 14px;
+  padding: 4px;
+  margin-bottom: 12px;
 }
 
-.drag-bar {
-  width: 36px;
-  height: 4px;
-  background: #e2e5eb;
-  border-radius: 2px;
-  margin: 0 auto;
+.mode-tab {
+  border: none;
+  border-radius: 11px;
+  min-height: 44px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &.active {
+    background: var(--sheet-accent-soft);
+    color: var(--sheet-accent-deep);
+    box-shadow: inset 0 0 0 1px var(--sheet-accent-border);
+  }
 }
 
-.type-tags {
+.sheet-hint {
+  margin: 0px 0 10px;
+  color: #9ca3af;
+  font-size: 12px;
+  text-align: right;
+}
+
+.sheet-block {
+  padding: 12px 0;
+  border-top: 1px solid #f3f4f6;
+}
+
+.sheet-label {
+  display: block;
+  color: #6b7280;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  overflow: visible;
-  margin-bottom: 18px;
+  gap: 8px;
 }
 
-.amount-section {
-  text-align: center;
-  padding: 8px 0 18px;
-}
-
-.amount-helper {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: #9ca3af;
-}
-
-.amount-label {
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.amount-value {
-  display: flex;
-  justify-content: center;
-  align-items: baseline;
-}
-
-.amount-prefix {
-  color: #6b7280;
-  font-size: 20px;
-}
-
-.amount-input {
-  width: 150px;
+.chip-btn {
   border: none;
-  outline: none;
-  background: transparent;
-  font-size: 32px;
-  font-weight: 500;
-  color: #111827;
-  text-align: left;
-}
+  border-radius: 14px;
+  background: #f3f4f6;
+  color: #4b5563;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 
-.amount-input.empty {
-  color: #d1d5db;
-}
-
-.amount-input::-webkit-outer-spin-button,
-.amount-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.form-item {
-  margin-bottom: 14px;
+  &.active {
+    background: var(--sheet-accent-soft);
+    color: var(--sheet-accent-deep);
+    box-shadow: inset 0 0 0 1px var(--sheet-accent-border);
+  }
 }
 
 .quote-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 8px;
+  padding: 8px 0 12px;
+  border-top: 1px solid #f3f4f6;
 }
 
 .quote-button {
   flex: 0 0 auto;
   min-width: 78px;
-  white-space: nowrap;
+  min-height: 44px;
+  border: none;
+  border-radius: 14px;
+  background: var(--sheet-accent-soft);
+  color: var(--sheet-accent-deep);
+  box-shadow: inset 0 0 0 1px var(--sheet-accent-border);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 
-  :deep(.van-button__text) {
-    white-space: nowrap;
+  &:disabled {
+    color: #9ca3af;
+    background: #f3f4f6;
+    box-shadow: none;
+    cursor: not-allowed;
   }
 }
 
 .quote-status {
   min-width: 0;
   flex: 1 1 auto;
+  color: #9ca3af;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.sheet-actions {
+  padding-top: 14px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.save-btn {
+  width: 100%;
+  min-height: 44px;
+  border: none;
+  border-radius: 14px;
+  background: var(--sheet-accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:active {
+    opacity: 0.82;
+  }
+
+  &:disabled {
+    background: #e5e7eb;
+    color: #9ca3af;
+    cursor: not-allowed;
+  }
+}
+
+:deep(.ledger-sheet .van-cell) {
+  padding: 12px 0;
+}
+
+:deep(.ledger-sheet .van-cell::after) {
+  left: 0;
+  right: 0;
+}
+
+:deep(.ledger-sheet .van-field__label) {
+  color: #6b7280;
+}
+
+:deep(.ledger-sheet .van-field__control) {
+  color: #111827;
+  font-weight: 600;
+}
+
+:deep(.ledger-sheet .van-field__control::placeholder) {
+  color: #d1d5db;
+  font-weight: 500;
+}
+
+:deep(.ledger-sheet .van-field__right-icon) {
   color: #9ca3af;
 }
 
-.field-label {
-  font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.field-wrapper {
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid #e8eaef;
-  background: #f8f9fb;
-}
-
-.textarea-wrapper {
-  overflow: hidden;
-}
-
-.form-field {
-  background: transparent;
-
-  :deep(.van-field__control) {
-    color: #111827;
-  }
-
-  :deep(.van-field__control::placeholder) {
-    color: #d1d5db;
-  }
-
-  :deep(.van-field__right-icon) {
-    color: #9ca3af;
-  }
-}
-
-.sheet-footer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  padding: 14px 20px calc(4px + env(safe-area-inset-bottom, 0px));
-  background: transparent;
-  border-top: none;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.confirm-button {
-  border: none;
-  color: white;
-  height: 50px;
-  min-width: 140px;
-  padding: 0 28px;
-  font-size: 15px;
-  font-weight: 500;
-  border-radius: 32px;
-  pointer-events: auto;
+:deep(.ledger-sheet .amount-field .van-field__control) {
+  font-size: 20px;
+  font-weight: 700;
 }
 
 :global(.modern-sheet-popup) {
   background: transparent !important;
+  overflow: hidden !important;
+  border-radius: 24px 24px 0 0 !important;
 }
 </style>

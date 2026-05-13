@@ -3,6 +3,7 @@ import { ref, onMounted, onActivated, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import ModernBottomSheet from '@/components/ModernBottomSheet.vue';
 import { useLiabilityRecords } from '@/composables/useFinancialLedger';
+import { formatAmount } from '@/utils/amountDisplay';
 import type { LedgerFormPayload } from '@/types/ledger';
 
 const router = useRouter();
@@ -89,11 +90,7 @@ const onSaveLiability = async (data: Record<string, unknown>) => {
 };
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('zh-CN', {
-    style: 'currency',
-    currency: 'CNY',
-    minimumFractionDigits: 0
-  }).format(value);
+  return formatAmount(value);
 };
 
 const categoryMeta = (category: any) => {
@@ -115,11 +112,6 @@ const categoryMeta = (category: any) => {
 
 const detailRows = computed(() => liabilitiesByCategory.value.filter((c) => c.liabilities.length > 0));
 
-const dotColor = (wrap: string) => {
-  if (wrap === 'blue') return '#3b82f6';
-  if (wrap === 'red') return '#f87171';
-  return '#94a3b8';
-};
 </script>
 
 <template>
@@ -130,7 +122,7 @@ const dotColor = (wrap: string) => {
         <van-icon name="arrow-left" size="20" color="#374151" />
       </button>
       <h1 class="page-title">负债</h1>
-      <button type="button" class="icon-btn" aria-label="添加负债" @click="addLiability">
+      <button type="button" class="icon-btn" aria-label="新增负债" @click="addLiability">
         <van-icon name="plus" size="20" color="#4b5563" />
       </button>
     </header>
@@ -140,8 +132,9 @@ const dotColor = (wrap: string) => {
         <div class="hero-deco hero-deco-a" aria-hidden="true" />
         <div class="hero-deco hero-deco-b" aria-hidden="true" />
         <p class="hero-label">总负债</p>
-        <h2 class="hero-amount">{{ formatCurrency(totalLiabilities) }}</h2>
-        <div class="hero-split">
+        <h2 v-if="liabilityCount" class="hero-amount">{{ formatCurrency(totalLiabilities) }}</h2>
+        <p v-else class="hero-empty">暂无负债记录</p>
+        <div v-if="liabilityCount" class="hero-split">
           <div class="hero-split-item">
             <p class="hero-meta-label">已还金额</p>
             <p class="hero-meta-value">{{ formatCurrency(paidAmount) }}</p>
@@ -166,7 +159,7 @@ const dotColor = (wrap: string) => {
           tabindex="0"
           @click="goCategory(category.name)"
         >
-          <div class="cat-icon" :class="`wrap-${category.wrap}`">
+          <div class="cat-icon wrap-gray">
             <van-icon :name="category.icon" size="20" class="cat-icon-inner" />
           </div>
           <p class="cat-name">{{ category.name }}</p>
@@ -194,7 +187,6 @@ const dotColor = (wrap: string) => {
           @click="goCategory(category.name)"
         >
           <div class="list-left">
-            <span class="list-dot" :style="{ backgroundColor: dotColor(category.wrap) }" />
             <div>
               <p class="list-name">{{ category.name }}</p>
               <p class="list-sub">{{ categoryMeta(category) }}</p>
@@ -236,7 +228,7 @@ const dotColor = (wrap: string) => {
 .liabilities-page {
   min-height: 100%;
   background: @finance-page-bg;
-  padding-bottom: 32px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 .page-max {
@@ -270,11 +262,11 @@ const dotColor = (wrap: string) => {
 }
 
 .icon-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 9999px;
   border: none;
-  background: #f3f4f6;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -282,7 +274,7 @@ const dotColor = (wrap: string) => {
   cursor: pointer;
 
   &:active {
-    background: #e5e7eb;
+    background: #f3f4f6;
   }
 
   &.plain {
@@ -300,34 +292,39 @@ const dotColor = (wrap: string) => {
 
 .hero-card {
   position: relative;
-  border-radius: 24px;
+  min-height: 150px;
+  border-radius: 16px;
   padding: 24px;
   overflow: hidden;
-  color: #fff;
-  background: linear-gradient(to bottom right, #f43f5e, #db2777);
+  color: #111827;
+  background: #fff;
   box-shadow: @finance-card-shadow;
+  border: 1px solid rgba(15, 23, 42, 0.04);
+
 }
 
 .hero-deco {
   position: absolute;
   border-radius: 9999px;
   pointer-events: none;
-  background: rgba(255, 255, 255, 0.1);
 }
 
 .hero-deco-a {
-  width: 160px;
-  height: 160px;
-  right: -40px;
-  top: -40px;
+  right: -34px;
+  top: -38px;
+  width: 132px;
+  height: 132px;
+  background: #fff1f2;
+  opacity: 0.92;
 }
 
 .hero-deco-b {
-  width: 128px;
-  height: 128px;
-  left: -40px;
-  bottom: -40px;
-  background: rgba(255, 255, 255, 0.05);
+  right: 24px;
+  bottom: -44px;
+  width: 104px;
+  height: 104px;
+  background: #fef2f2;
+  opacity: 0.72;
 }
 
 .hero-label {
@@ -335,7 +332,7 @@ const dotColor = (wrap: string) => {
   z-index: 1;
   margin: 0 0 4px;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.88);
+  color: #6b7280;
   font-weight: 500;
 }
 
@@ -345,7 +342,17 @@ const dotColor = (wrap: string) => {
   margin: 0;
   font-size: 36px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
+  color: #e11d48;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.hero-empty {
+  margin: 10px 0 0;
+  color: #9ca3af;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .hero-split {
@@ -354,7 +361,7 @@ const dotColor = (wrap: string) => {
   display: flex;
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1px solid #eef0f3;
 }
 
 .hero-split-item {
@@ -363,20 +370,23 @@ const dotColor = (wrap: string) => {
 
 .hero-divider {
   width: 1px;
-  background: rgba(255, 255, 255, 0.2);
+  background: #eef0f3;
   margin: 0 16px;
 }
 
 .hero-meta-label {
   margin: 0 0 4px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.82);
+  color: #9ca3af;
 }
 
 .hero-meta-value {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .section {
@@ -401,10 +411,12 @@ const dotColor = (wrap: string) => {
 }
 
 .cat-card {
+  min-height: 128px;
   background: #fff;
   border-radius: 16px;
   padding: 16px;
   box-shadow: @finance-card-shadow;
+  border: 1px solid rgba(15, 23, 42, 0.04);
 }
 
 .cat-icon {
@@ -453,6 +465,8 @@ const dotColor = (wrap: string) => {
   font-size: 18px;
   font-weight: 700;
   color: #111827;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .cat-monthly {
@@ -470,9 +484,10 @@ const dotColor = (wrap: string) => {
 
 .list-card {
   background: #fff;
-  border-radius: 24px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: @finance-card-shadow;
+  border: 1px solid rgba(15, 23, 42, 0.04);
 }
 
 .list-row {
@@ -494,15 +509,7 @@ const dotColor = (wrap: string) => {
 .list-left {
   display: flex;
   align-items: center;
-  gap: 12px;
   min-width: 0;
-}
-
-.list-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 9999px;
-  flex-shrink: 0;
 }
 
 .list-name {
@@ -533,14 +540,16 @@ const dotColor = (wrap: string) => {
   font-size: 15px;
   font-weight: 600;
   color: #111827;
+  font-variant-numeric: tabular-nums;
 }
 
 .empty-panel {
   background: #fff;
-  border-radius: 24px;
+  border-radius: 16px;
   padding: 32px 24px;
   text-align: center;
   box-shadow: @finance-card-shadow;
+  border: 1px solid rgba(15, 23, 42, 0.04);
 }
 
 .empty-panel-icon {

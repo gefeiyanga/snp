@@ -3,6 +3,106 @@ export type AssetValuationMode = 'manual_amount' | 'market_quantity';
 export type LegacyInvestmentAssetType = 'fund' | 'stock';
 export type InvestmentAssetType = 'security' | 'crypto' | LegacyInvestmentAssetType;
 export type AssetCurrency = 'CNY' | 'USD' | 'USDT';
+export type LedgerAccountType =
+  | 'cash'
+  | 'bank'
+  | 'payment'
+  | 'credit_card'
+  | 'loan'
+  | 'investment'
+  | 'manual_asset';
+export type LedgerAccountSide = 'asset' | 'liability';
+export type LedgerTransactionType =
+  | 'income'
+  | 'expense'
+  | 'transfer'
+  | 'loan_payment'
+  | 'investment_buy'
+  | 'investment_sell'
+  | 'balance_adjustment';
+export type LedgerTransactionStatus = 'pending' | 'confirmed' | 'void';
+export type LedgerTransactionSource = 'manual' | 'recurring_rule' | 'import' | 'loan_schedule';
+export type RecurringRuleFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type RecurringRuleKind = 'income' | 'expense' | 'transfer' | 'loan_payment';
+
+/** 账户：现金、银行卡、信用卡、贷款账户等余额载体 */
+export interface AccountRecord {
+  id: string;
+  name: string;
+  type: LedgerAccountType;
+  side: LedgerAccountSide;
+  currency: AssetCurrency;
+  openingBalance: number;
+  category?: string;
+  description?: string;
+  linkedAssetId?: string;
+  linkedLiabilityId?: string;
+  archived?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 收入、支出、转账、还贷等维护型流水 */
+export interface TransactionRecord {
+  id: string;
+  date: string;
+  type: LedgerTransactionType;
+  amount: number;
+  currency: AssetCurrency;
+  accountId?: string;
+  counterAccountId?: string;
+  category: string;
+  description?: string;
+  status: LedgerTransactionStatus;
+  source: LedgerTransactionSource;
+  sourceId?: string;
+  relatedAssetId?: string;
+  relatedLiabilityId?: string;
+  principalAmount?: number;
+  interestAmount?: number;
+  feeAmount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 周期规则：工资、房贷、车贷、房租等重复事项 */
+export interface RecurringRuleRecord {
+  id: string;
+  name: string;
+  kind: RecurringRuleKind;
+  frequency: RecurringRuleFrequency;
+  interval: number;
+  startDate: string;
+  endDate?: string;
+  dayOfMonth?: number;
+  amount: number;
+  currency: AssetCurrency;
+  accountId?: string;
+  counterAccountId?: string;
+  category: string;
+  description?: string;
+  relatedLiabilityId?: string;
+  active: boolean;
+  lastConfirmedDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 从周期规则生成、等待用户确认的发生项 */
+export interface RecurringOccurrence {
+  id: string;
+  ruleId: string;
+  date: string;
+  name: string;
+  kind: RecurringRuleKind;
+  amount: number;
+  currency: AssetCurrency;
+  accountId?: string;
+  counterAccountId?: string;
+  category: string;
+  description?: string;
+  relatedLiabilityId?: string;
+}
 
 export interface AssetRecord {
   id: string;

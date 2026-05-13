@@ -148,6 +148,47 @@ export function scheduledMonthlyPayment(
   return installmentEqualPrincipal(principal, annualPercent, termMonths, nextPeriod);
 }
 
+export interface LoanInstallment {
+  period: number;
+  dueDate: string;
+  totalPayment: number;
+  principalPayment: number;
+  interestPayment: number;
+  remainingAfterPayment: number;
+}
+
+/** 生成单期计划，用于把房贷/车贷待办拆成「本金减少 + 利息支出」。 */
+export function scheduledLoanInstallment(
+  principal: number,
+  annualPercent: number,
+  termMonths: number,
+  method: RepaymentMethod,
+  firstPaymentYmd: string,
+  period1Based: number
+): LoanInstallment {
+  const period = Math.min(Math.max(period1Based, 1), termMonths);
+  const balanceBefore =
+    method === 'equal_payment'
+      ? remainingAfterEqualPayment(principal, annualPercent, termMonths, period - 1)
+      : remainingAfterEqualPrincipal(principal, annualPercent, termMonths, period - 1);
+  const monthlyRate = monthlyRateFromAnnualPercent(annualPercent);
+  const interestPayment = balanceBefore * monthlyRate;
+  const remainingAfterPayment =
+    method === 'equal_payment'
+      ? remainingAfterEqualPayment(principal, annualPercent, termMonths, period)
+      : remainingAfterEqualPrincipal(principal, annualPercent, termMonths, period);
+  const principalPayment = Math.max(balanceBefore - remainingAfterPayment, 0);
+
+  return {
+    period,
+    dueDate: nthDueDate(firstPaymentYmd, period),
+    totalPayment: roundMoney2(principalPayment + interestPayment),
+    principalPayment: roundMoney2(principalPayment),
+    interestPayment: roundMoney2(interestPayment),
+    remainingAfterPayment: roundMoney2(remainingAfterPayment)
+  };
+}
+
 export function roundMoney2(x: number): number {
   return Math.round(x * 100) / 100;
 }
@@ -177,8 +218,9 @@ export function hydrateLiability(row: LiabilityRecord): LiabilityRecord {
     return row;
   }
   const first = row.firstPaymentDate ?? row.dueDate;
-  const term = row.termMonths!;
-  const method = row.repaymentMethod!;
+  const term = row.termMonths;
+  const method = row.repaymentMethod;
+  if (!first || !term || !method) return row;
   const k = paidPeriods(first, term, todayYmd());
   const P = row.amount;
   const rate = row.interestRate;

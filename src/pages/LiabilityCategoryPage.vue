@@ -191,11 +191,11 @@ const confirmDelete = async (row: LiabilityRecord) => {
 }
 
 .icon-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 9999px;
   border: none;
-  background: #f3f4f6;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -203,7 +203,7 @@ const confirmDelete = async (row: LiabilityRecord) => {
   cursor: pointer;
 
   &:active {
-    background: #e5e7eb;
+    background: #f3f4f6;
   }
 
   &.plain {

@@ -34,6 +34,12 @@ declare global {
   const eagerComputed: typeof import('@vueuse/core')['eagerComputed']
   const effectScope: typeof import('vue')['effectScope']
   const extendRef: typeof import('@vueuse/core')['extendRef']
+  const formatAmount: typeof import('./utils/amountDisplay')['formatAmount']
+  const formatPercent: typeof import('./utils/amountDisplay')['formatPercent']
+  const formatPrice: typeof import('./utils/amountDisplay')['formatPrice']
+  const formatPriceDecimal: typeof import('./utils/amountDisplay')['formatPriceDecimal']
+  const formatSignedAmount: typeof import('./utils/amountDisplay')['formatSignedAmount']
+  const formatSignedAmountWithRate: typeof import('./utils/amountDisplay')['formatSignedAmountWithRate']
   const getCurrentInstance: typeof import('vue')['getCurrentInstance']
   const getCurrentScope: typeof import('vue')['getCurrentScope']
   const h: typeof import('vue')['h']
@@ -109,6 +115,7 @@ declare global {
   const unref: typeof import('vue')['unref']
   const unrefElement: typeof import('@vueuse/core')['unrefElement']
   const until: typeof import('@vueuse/core')['until']
+  const useAccountRecords: typeof import('./composables/useCashflowLedger')['useAccountRecords']
   const useActiveElement: typeof import('@vueuse/core')['useActiveElement']
   const useAnimate: typeof import('@vueuse/core')['useAnimate']
   const useAppStorage: typeof import('./composables/useStorage')['useAppStorage']
@@ -225,6 +232,7 @@ declare global {
   const usePreferredReducedTransparency: typeof import('@vueuse/core')['usePreferredReducedTransparency']
   const usePrevious: typeof import('@vueuse/core')['usePrevious']
   const useRafFn: typeof import('@vueuse/core')['useRafFn']
+  const useRecurringRuleRecords: typeof import('./composables/useCashflowLedger')['useRecurringRuleRecords']
   const useRefHistory: typeof import('@vueuse/core')['useRefHistory']
   const useResizeObserver: typeof import('@vueuse/core')['useResizeObserver']
   const useSSRWidth: typeof import('@vueuse/core')['useSSRWidth']
@@ -262,6 +270,7 @@ declare global {
   const useToNumber: typeof import('@vueuse/core')['useToNumber']
   const useToString: typeof import('@vueuse/core')['useToString']
   const useToggle: typeof import('@vueuse/core')['useToggle']
+  const useTransactionRecords: typeof import('./composables/useCashflowLedger')['useTransactionRecords']
   const useTransition: typeof import('@vueuse/core')['useTransition']
   const useUrlSearchParams: typeof import('@vueuse/core')['useUrlSearchParams']
   const useUserMedia: typeof import('@vueuse/core')['useUserMedia']
@@ -334,6 +343,12 @@ declare module 'vue' {
     readonly eagerComputed: UnwrapRef<typeof import('@vueuse/core')['eagerComputed']>
     readonly effectScope: UnwrapRef<typeof import('vue')['effectScope']>
     readonly extendRef: UnwrapRef<typeof import('@vueuse/core')['extendRef']>
+    readonly formatAmount: UnwrapRef<typeof import('./utils/amountDisplay')['formatAmount']>
+    readonly formatPercent: UnwrapRef<typeof import('./utils/amountDisplay')['formatPercent']>
+    readonly formatPrice: UnwrapRef<typeof import('./utils/amountDisplay')['formatPrice']>
+    readonly formatPriceDecimal: UnwrapRef<typeof import('./utils/amountDisplay')['formatPriceDecimal']>
+    readonly formatSignedAmount: UnwrapRef<typeof import('./utils/amountDisplay')['formatSignedAmount']>
+    readonly formatSignedAmountWithRate: UnwrapRef<typeof import('./utils/amountDisplay')['formatSignedAmountWithRate']>
     readonly getCurrentInstance: UnwrapRef<typeof import('vue')['getCurrentInstance']>
     readonly getCurrentScope: UnwrapRef<typeof import('vue')['getCurrentScope']>
     readonly h: UnwrapRef<typeof import('vue')['h']>
@@ -409,6 +424,7 @@ declare module 'vue' {
     readonly unref: UnwrapRef<typeof import('vue')['unref']>
     readonly unrefElement: UnwrapRef<typeof import('@vueuse/core')['unrefElement']>
     readonly until: UnwrapRef<typeof import('@vueuse/core')['until']>
+    readonly useAccountRecords: UnwrapRef<typeof import('./composables/useCashflowLedger')['useAccountRecords']>
     readonly useActiveElement: UnwrapRef<typeof import('@vueuse/core')['useActiveElement']>
     readonly useAnimate: UnwrapRef<typeof import('@vueuse/core')['useAnimate']>
     readonly useAppStorage: UnwrapRef<typeof import('./composables/useStorage')['useAppStorage']>
@@ -525,6 +541,7 @@ declare module 'vue' {
     readonly usePreferredReducedTransparency: UnwrapRef<typeof import('@vueuse/core')['usePreferredReducedTransparency']>
     readonly usePrevious: UnwrapRef<typeof import('@vueuse/core')['usePrevious']>
     readonly useRafFn: UnwrapRef<typeof import('@vueuse/core')['useRafFn']>
+    readonly useRecurringRuleRecords: UnwrapRef<typeof import('./composables/useCashflowLedger')['useRecurringRuleRecords']>
     readonly useRefHistory: UnwrapRef<typeof import('@vueuse/core')['useRefHistory']>
     readonly useResizeObserver: UnwrapRef<typeof import('@vueuse/core')['useResizeObserver']>
     readonly useSSRWidth: UnwrapRef<typeof import('@vueuse/core')['useSSRWidth']>
@@ -562,6 +579,7 @@ declare module 'vue' {
     readonly useToNumber: UnwrapRef<typeof import('@vueuse/core')['useToNumber']>
     readonly useToString: UnwrapRef<typeof import('@vueuse/core')['useToString']>
     readonly useToggle: UnwrapRef<typeof import('@vueuse/core')['useToggle']>
+    readonly useTransactionRecords: UnwrapRef<typeof import('./composables/useCashflowLedger')['useTransactionRecords']>
     readonly useTransition: UnwrapRef<typeof import('@vueuse/core')['useTransition']>
     readonly useUrlSearchParams: UnwrapRef<typeof import('@vueuse/core')['useUrlSearchParams']>
     readonly useUserMedia: UnwrapRef<typeof import('@vueuse/core')['useUserMedia']>

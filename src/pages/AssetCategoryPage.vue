@@ -4,7 +4,9 @@ import { useRoute, useRouter } from 'vue-router';
 import { showConfirmDialog } from 'vant';
 import ModernBottomSheet from '@/components/ModernBottomSheet.vue';
 import { useAssetRecords } from '@/composables/useFinancialLedger';
+import { calculateInvestmentReturn } from '@/domain/investmentReturns';
 import { assetMatchesGroupLabel } from '@/domain/ledgerCategories';
+import { formatPrice } from '@/utils/amountDisplay';
 import type { AssetRecord, LedgerFormPayload } from '@/types/ledger';
 
 const route = useRoute();
@@ -47,10 +49,34 @@ const goBack = () => {
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 0 }).format(value);
 
+const formatSignedCurrency = (value: number) => {
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${formatCurrency(value)}`;
+};
+
+const formatPercent = (value: number) => {
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${(value * 100).toFixed(2)}%`;
+};
+
+const investmentReturnText = (row: AssetRecord) => {
+  const result = calculateInvestmentReturn(row);
+  if (!result) return '';
+  return `${formatSignedCurrency(result.profit)} ${formatPercent(result.profitRate)}`;
+};
+
+const investmentReturnClass = (row: AssetRecord) => {
+  const result = calculateInvestmentReturn(row);
+  if (!result) return '';
+  if (result.profit > 0) return 'gain';
+  if (result.profit < 0) return 'loss';
+  return 'flat';
+};
+
 const formatUnitPrice = (row: AssetRecord) => {
   if (!row.unitPrice) return '';
-  if (row.investmentType === 'crypto') return `${row.unitPrice.toLocaleString('zh-CN')} USDT`;
-  return formatCurrency(row.unitPrice);
+  if (row.investmentType === 'crypto') return formatPrice(row.unitPrice, 'USDT');
+  return formatPrice(row.unitPrice);
 };
 
 const formatQuoteUpdatedAt = (value?: string) => {
@@ -76,6 +102,10 @@ const investmentSummary = (row: AssetRecord) => {
 const quoteUpdatedText = (row: AssetRecord) => {
   if (row.category !== '投资' || !row.quoteUpdatedAt) return '';
   return `更新时间 ${formatQuoteUpdatedAt(row.quoteUpdatedAt)}`;
+};
+
+const investmentMetaText = (row: AssetRecord) => {
+  return [quoteUpdatedText(row), investmentReturnText(row)].filter(Boolean).join(' · ');
 };
 
 const openCreate = () => {
@@ -147,12 +177,21 @@ const confirmDelete = async (row: AssetRecord) => {
       <van-cell-group v-if="rows.length" inset class="list-group">
         <van-swipe-cell v-for="row in rows" :key="row.id">
           <div class="cell-row" role="button" tabindex="0" @click="openEdit(row)">
-            <div>
+            <div class="cell-head">
               <div class="cell-title">{{ row.name }}</div>
-              <div class="cell-sub">{{ investmentSummary(row) }}</div>
-              <div v-if="quoteUpdatedText(row)" class="cell-meta">{{ quoteUpdatedText(row) }}</div>
+              <div class="cell-amt">{{ formatCurrency(row.amount) }}</div>
             </div>
-            <div class="cell-amt">{{ formatCurrency(row.amount) }}</div>
+            <div class="cell-sub">{{ investmentSummary(row) }}</div>
+            <div v-if="investmentMetaText(row)" class="cell-meta">
+              <span>{{ quoteUpdatedText(row) }}</span>
+              <span
+                v-if="investmentReturnText(row)"
+                class="cell-return"
+                :class="investmentReturnClass(row)"
+              >
+                {{ quoteUpdatedText(row) ? ` · ${investmentReturnText(row)}` : investmentReturnText(row) }}
+              </span>
+            </div>
           </div>
           <template #right>
             <van-button square type="danger" class="swipe-del" text="删除" @click.stop="confirmDelete(row)" />
@@ -217,11 +256,11 @@ const confirmDelete = async (row: AssetRecord) => {
 }
 
 .icon-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 9999px;
   border: none;
-  background: #f3f4f6;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -229,7 +268,7 @@ const confirmDelete = async (row: AssetRecord) => {
   cursor: pointer;
 
   &:active {
-    background: #e5e7eb;
+    background: #f3f4f6;
   }
 
   &.plain {
@@ -255,40 +294,68 @@ const confirmDelete = async (row: AssetRecord) => {
 }
 
 .cell-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
+  display: block;
+  padding: 18px 32px;
   background: #fff;
 }
 
+.cell-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .cell-title {
-  font-size: 15px;
-  font-weight: 500;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 16px;
+  font-weight: 600;
   color: #111827;
+  line-height: 1.35;
 }
 
 .cell-sub {
-  margin-top: 4px;
-  font-size: 12px;
+  margin-top: 8px;
+  font-size: 13px;
   color: #9ca3af;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .cell-meta {
-  margin-top: 3px;
-  font-size: 11px;
+  margin-top: 6px;
+  font-size: 12px;
   color: #6b7280;
+  line-height: 1.45;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .cell-amt {
+  flex: 0 0 auto;
   font-size: 15px;
   font-weight: 600;
   color: #111827;
-  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cell-return {
+  font-weight: 600;
+
+  &.gain {
+    color: #dc2626;
+  }
+
+  &.loss {
+    color: #059669;
+  }
+
+  &.flat {
+    color: #6b7280;
+  }
 }
 
 .swipe-del {
